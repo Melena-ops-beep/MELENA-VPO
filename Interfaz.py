@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from groq import Groq
+import ollama
 import os
 import base64
 import unicodedata
@@ -9,7 +9,6 @@ from pypdf import PdfReader
 import chromadb
 import cv2
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
-from sentence_transformers import SentenceTransformer
 
 try:
     import av
@@ -19,28 +18,29 @@ try:
 except ImportError:
     WEBRTC_DISPONIBLE = False
 
-# --- CONFIGURACIÓN DE RUTAS DINÁMICAS (Compatibles con Windows y Render/Linux) ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# --- CONFIGURACIÓN DE RUTAS ---
+BASE_DIR = r"C:\Residencia_IA"
 IMG_DIR = os.path.join(BASE_DIR, "img")
 DATA_DIR = os.path.join(BASE_DIR, "CONOCIMIENTO_VPO")
 DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
 INDICE_DIR = os.path.join(BASE_DIR, "INDICE_VECTORIAL")
-
-# --- CONFIGURACIÓN DE MODELOS ---
-MODELO_CHAT = "llama-3.3-70b-versatile"
-
-# Inicializar cliente de Groq leyendo la variable de entorno o clave directa
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-client_groq = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
-@st.cache_resource
-def cargar_modelo_embedding():
-    # Modelo de embeddings súper liviano (ideal para servidores gratis como Render)
-    return SentenceTransformer("all-MiniLM-L6-v2")
+MODELO_EMBEDDING = "nomic-embed-text"
+MODELO_CHAT = "phi3"
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
-
+# Agrega esto al inicio de tu código original:
+st.markdown(
+    """
+    <style>
+    /* Ajuste responsivo para celulares */
+    .element-container, .stTextInput, .stSelectbox, .stButton {
+        width: 100% !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 # --- DICCIONARIO MAESTRO ---
 ESTRUCTURA_FALLAS = {
     "Depaletizadora": {"foto": "depaletizadora", "componentes": {"Cabezal de agarre": ["Mecánica", "Neumática", "Electrónica"], "Mesa de descarga": ["Mecánica"], "Sistema de plano móvil": ["Mecánica"], "Sistema de elevación": ["Mecánica", "Electrónica"], "Sistema de transportación": ["Mecánica"]}},
@@ -260,8 +260,6 @@ def leer_pdf_bytes_cacheado(ruta_pdf, fecha_modificacion):
 # --- RAG, RENDERIZADO RAM E ÍNDICE VECTORIAL ---
 @st.cache_resource
 def obtener_coleccion_vectorial():
-    if not os.path.exists(INDICE_DIR):
-        os.makedirs(INDICE_DIR, exist_ok=True)
     cliente = chromadb.PersistentClient(path=INDICE_DIR)
     return cliente.get_or_create_collection(name="documentos_melena")
 
@@ -350,9 +348,9 @@ def trocear_texto(texto, tam_chunk=100, solape=20):
     return chunks
 
 def obtener_embedding(texto):
-    model = cargar_modelo_embedding()
     texto_seguro = texto[:1000]
-    return model.encode(texto_seguro).tolist()
+    respuesta = ollama.embeddings(model=MODELO_EMBEDDING, prompt=texto_seguro)
+    return respuesta['embedding']
 
 def indexar_todos_los_documentos():
     coleccion = obtener_coleccion_vectorial()
@@ -404,7 +402,7 @@ def indexar_todos_los_documentos():
                             total_chunks += 1
     return total_archivos, total_chunks
 
-def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=8, permitir_fallback=True):
+def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=3, permitir_fallback=True):
     coleccion = obtener_coleccion_vectorial()
     if coleccion.count() == 0: return []
     embedding_pregunta = obtener_embedding(pregunta)
@@ -454,6 +452,7 @@ _icono_generador_b64 = get_base64("icono_generador")
 _icono_biblioteca_b64 = get_base64("icono_biblioteca")
 _icono_preguntar_b64 = get_base64("icono_preguntar")
 _icono_escanear_b64 = get_base64("escanear")
+_icono_subir_b64 = get_base64("subir")
 _icono_advertencia_b64 = get_base64("advertencia")
 
 _icono_ver_b64 = get_base64("icono_ver")
@@ -504,6 +503,18 @@ st.markdown(f"""
 
     .block-container {{ padding-top: 1rem !important; }}
 
+    div[data-testid="stCheckbox"] input[type="checkbox"]:checked {{
+        accent-color: #0056b3 !important;
+    }}
+    div[data-baseweb="checkbox"] div[aria-checked="true"] {{
+        background-color: #0056b3 !important;
+        border-color: #0056b3 !important;
+    }}
+    div[data-testid="stCheckbox"] div[aria-checked="true"] {{
+        background-color: #0056b3 !important;
+        border-color: #0056b3 !important;
+    }}
+
     div[data-testid="stButton"] > button[kind="secondary"], 
     div[data-testid="stDownloadButton"] > button {{
         background-color: #222222 !important;
@@ -515,7 +526,7 @@ st.markdown(f"""
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 0.9em !important;
+        font-size: 0.85em !important;
         transition: all 0.2s ease !important;
         width: 100% !important;
     }}
@@ -536,7 +547,7 @@ st.markdown(f"""
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 0.9em !important;
+        font-size: 0.85em !important;
         box-shadow: 0 0 14px rgba(255, 215, 0, 0.9) !important;
         width: 100% !important;
     }}
@@ -644,12 +655,12 @@ with st.sidebar:
     try: _total_indexado = obtener_coleccion_vectorial().count()
     except Exception: _total_indexado = None
 
-    if _total_indexado is None: st.caption("⚠️ No se pudo abrir el índice todavía.")
-    elif _total_indexado == 0: st.caption("⚠️ El índice está vacío. Dale clic al botón de abajo.")
-    else: st.caption(f"✅ {_total_indexado} fragmento(s) indexado(s) actualmente.")
+    if _total_indexado is None: st.caption("No se pudo abrir el índice en este momento.")
+    elif _total_indexado == 0: st.caption("El índice está vacío. Presione el botón de abajo.")
+    else: st.caption(f"{_total_indexado} fragmento(s) indexado(s) actualmente.")
 
     if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
-        with st.spinner("Leyendo PDFs e indexando texto por páginas..."):
+        with st.spinner("Procesando documentos e indexando contenido por páginas..."):
             archivos, chunks = indexar_todos_los_documentos()
         st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
 
@@ -659,8 +670,8 @@ def _css_icono_boton(clave_boton, icono_b64):
     return f"""
     .st-key-{clave_boton} button {{
         background-image: url(data:image/png;base64,{icono_b64});
-        background-repeat: no-repeat; background-position: 16px center; background-size: 26px 26px;
-        text-align: left !important; padding-left: 54px !important;
+        background-repeat: no-repeat; background-position: 12px center; background-size: 24px 24px;
+        text-align: left !important; padding-left: 46px !important;
     }}
     """
 
@@ -670,6 +681,7 @@ st.markdown(f"""
     {_css_icono_boton("btn_tab_docs", _icono_biblioteca_b64)}
     {_css_icono_boton("btn_tab_preguntas", _icono_preguntar_b64)}
     {_css_icono_boton("btn_tab_qr", _icono_escanear_b64)}
+    {_css_icono_boton("btn_tab_subir", _icono_subir_b64)}
     </style>
 """, unsafe_allow_html=True)
 
@@ -678,24 +690,29 @@ p_plan = (_tab == "plan")
 p_docs = (_tab == "docs")
 p_preg = (_tab == "preguntas")
 p_qr = (_tab == "qr")
+p_subir = (_tab == "subir")
 
-menu_col1, menu_col2, menu_col3, menu_col4 = st.columns(4)
+menu_col1, menu_col2, menu_col3, menu_col4, menu_col5 = st.columns(5)
 
 with menu_col1:
-    if st.button("Generador de Plan de Reacción", key="btn_tab_plan", type="primary" if p_plan else "secondary", use_container_width=True):
+    if st.button("Generador Plan Reacción", key="btn_tab_plan", type="primary" if p_plan else "secondary", use_container_width=True):
         st.session_state.tab_activa = "plan"
         st.rerun()
 with menu_col2:
-    if st.button("Biblioteca de Documentos", key="btn_tab_docs", type="primary" if p_docs else "secondary", use_container_width=True):
+    if st.button("Biblioteca Documentos", key="btn_tab_docs", type="primary" if p_docs else "secondary", use_container_width=True):
         st.session_state.tab_activa = "docs"
         st.rerun()
 with menu_col3:
-    if st.button("Preguntar a los Documentos", key="btn_tab_preguntas", type="primary" if p_preg else "secondary", use_container_width=True):
+    if st.button("Preguntar a Documentos", key="btn_tab_preguntas", type="primary" if p_preg else "secondary", use_container_width=True):
         st.session_state.tab_activa = "preguntas"
         st.rerun()
 with menu_col4:
     if st.button("Escanear Código QR", key="btn_tab_qr", type="primary" if p_qr else "secondary", use_container_width=True):
         st.session_state.tab_activa = "qr"
+        st.rerun()
+with menu_col5:
+    if st.button("Subir un documento", key="btn_tab_subir", type="primary" if p_subir else "secondary", use_container_width=True):
+        st.session_state.tab_activa = "subir"
         st.rerun()
 
 st.divider()
@@ -714,8 +731,7 @@ if st.session_state.tab_activa == "plan":
             btn = st.button("GENERAR PLAN DE ACCIÓN", type="primary")
 
         with col_componentes:
-            tag_adv = f'<img src="data:image/png;base64,{_icono_advertencia_b64}" style="height:22px; width:22px; vertical-align:middle; margin-right:6px;">' if _icono_advertencia_b64 else ''
-            st.markdown(f"<p style='font-weight: bold; color: #FFD700; margin-bottom: 6px; font-size: 0.9em; display: flex; align-items: center;'>{tag_adv}Componentes críticos de la máquina:</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-weight: bold; color: #FFD700; margin-bottom: 6px; font-size: 0.9em;'>Componentes críticos de la máquina:</p>", unsafe_allow_html=True)
             
             comp_list = list(ESTRUCTURA_FALLAS[area_sel]["componentes"].keys())
             
@@ -732,7 +748,6 @@ if st.session_state.tab_activa == "plan":
             if desc:
                 placeholder = st.empty()
                 
-                # --- VERIFICACIÓN DE CACHÉ SEMÁNTICO EN PLAN DE REACCIÓN ---
                 consulta_texto = f"{tipo_falla_sel} {desc}"
                 clave_filtro_plan = f"PLAN|{linea_sel}|{area_sel}"
                 emb_consulta = obtener_embedding(consulta_texto)
@@ -741,18 +756,18 @@ if st.session_state.tab_activa == "plan":
                 
                 if item_cached:
                     placeholder.empty()
-                    st.info(f"⚡ RESPUESTA RECUPERADA EN <0.5s DESDE CACHÉ SEMÁNTICO (Similitud: {sim_score*100:.1f}%)")
+                    st.info(f"Respuesta recuperada desde caché semántico (Similitud: {sim_score*100:.1f}%)")
                     if item_cached["es_oficial"]:
-                        st.success(f"✅ INFORMACIÓN SUSTENTADA EN MANUALES DE {linea_sel.upper()} - {area_sel.upper()}")
+                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
                     else:
-                        st.warning(f"⚠️ RESPUESTA BASADA EN CONOCIMIENTO GENERAL (Sin documentos cargados para {linea_sel} - {area_sel})")
+                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                     
                     st.markdown(f"<div style='color: white; font-size: 1.1em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
                     
                     if item_cached.get("evidencias"):
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>🔍 Evidencias Visuales</h4>", unsafe_allow_html=True)
-                        titulos_tabs = [f"{'🖼️' if e['tiene_imagen'] else '📄'} Pág. {e['pagina']}" for e in item_cached["evidencias"]]
+                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                        titulos_tabs = [f"Pág. {e['pagina']}" for e in item_cached["evidencias"]]
                         tabs = st.tabs(titulos_tabs)
                         for idx, tab in enumerate(tabs):
                             e = item_cached["evidencias"][idx]
@@ -772,7 +787,7 @@ if st.session_state.tab_activa == "plan":
                         consulta_texto, 
                         linea=linea_sel, 
                         area=area_sel, 
-                        top_k=8, 
+                        top_k=3, 
                         permitir_fallback=False
                     )
 
@@ -800,46 +815,47 @@ if st.session_state.tab_activa == "plan":
 
                     sys_prompt_plan = (
                         "Eres el Ingeniero Especialista en VPO (Global Management System) de Grupo Modelo / AB InBev, "
-                        "experto exclusivo en plantas industriales de envasado de CERVEZA EN BOTELLA DE VIDRIO (Líneas 5 y 6).\n\n"
-                        "REGLAS OBLIGATORIAS:\n"
-                        "1. Tu dominio técnico es EXCLUSIVAMENTE la producción y envasado de cerveza en botella de vidrio.\n"
-                        "2. QUEDA PROHIBIDO mencionar o usar ejemplos de leche, jugos, refrescos, latas, plásticos PET o alimentos ajenos a la industria cervecera.\n"
-                        "3. Toda explicación sobre maquinaria (pasteurizadores túnel, lavadoras de botellas, llenadoras isobarométricas, motobombas, etc.) "
-                        "debe basarse en el proceso cervecero (duchas de agua, choque térmico en vidrio, unidades de pasteurización UP, etc.).\n"
-                        "4. Responde con lenguaje técnico, profesional y en pasos numerados claros.\n\n"
+                        "experto en plantas industriales de envasado de CERVEZA EN BOTELLA DE VIDRIO (Líneas 5 y 6).\n\n"
+                        "INSTRUCCIONES DE FORMATO Y TONO:\n"
+                        "- Mantén un tono sumamente formal, técnico, directo y estrictamente profesional.\n"
+                        "- QUEDA PROHIBIDO mencionar o usar ejemplos de leche, jugos, refrescos, latas, plásticos PET o alimentos ajenos a la industria cervecera.\n"
+                        "- Estructura tu respuesta obligatoriamente en:\n"
+                        "  1. **Diagnóstico Técnico:** (Causa raíz probable de la falla).\n"
+                        "  2. **Verificación de Componentes/Sensores:** (Qué revisar físicamente).\n"
+                        "  3. **Plan de Acción VPO:** (Pasos numerados para corregir la desviación).\n\n"
                         f"{instruccion_fuente}"
                     )
 
                     try:
-                        if not client_groq:
-                            raise ValueError("No se configuró la variable GROQ_API_KEY")
-
-                        res = client_groq.chat.completions.create(
-                            model=MODELO_CHAT,
+                        res = ollama.chat(
+                            model=MODELO_CHAT, 
                             messages=[
                                 {'role': 'system', 'content': sys_prompt_plan},
                                 {'role': 'user', 'content': f'Línea {linea_sel}, Área {area_sel}, Tipo de Falla: {tipo_falla_sel}. Detalles: {desc}'},
-                            ]
+                            ],
+                            options={
+                                'temperature': 0.1,
+                                'num_ctx': 2048
+                            }
                         )
                         placeholder.empty()
                         
-                        texto_res = res.choices[0].message.content
+                        texto_res = res['message']['content']
                         evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
                         
-                        # Guardar en Caché Semántico
                         guardar_en_cache_semantico(emb_consulta, clave_filtro_plan, texto_res, es_oficial, fragmentos_pdf, evidencias_calc)
                         
                         if es_oficial: 
-                            st.success(f"✅ INFORMACIÓN SUSTENTADA EN MANUALES DE {linea_sel.upper()} - {area_sel.upper()}")
+                            st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
                         else: 
-                            st.warning(f"⚠️ RESPUESTA BASADA EN CONOCIMIENTO GENERAL (Sin documentos cargados para {linea_sel} - {area_sel})")
+                            st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                         
                         st.markdown(f"<div style='color: white; font-size: 1.1em;'>{texto_res}</div>", unsafe_allow_html=True)
                         
                         if evidencias_calc:
                             st.divider()
-                            st.markdown(f"<h4 style='color: #FFD700;'>🔍 Evidencias Visuales</h4>", unsafe_allow_html=True)
-                            titulos_tabs = [f"{'🖼️' if e['tiene_imagen'] else '📄'} Pág. {e['pagina']}" for e in evidencias_calc]
+                            st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                            titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
                             tabs = st.tabs(titulos_tabs)
                             for idx, tab in enumerate(tabs):
                                 e = evidencias_calc[idx]
@@ -848,7 +864,7 @@ if st.session_state.tab_activa == "plan":
                                     st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
                     except Exception as e:
                         placeholder.empty()
-                        st.error(f"Error al conectar con la API de Groq: {e}")
+                        st.error(f"Error al conectar con el motor de IA: {e}")
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -890,7 +906,7 @@ elif st.session_state.tab_activa == "docs":
 
             if st.session_state[clave_ver]:
                 if tamano_mb > LIMITE_PREVIEW_MB:
-                    st.warning(f"Este archivo pesa {tamano_mb:.1f} MB, descarga directa para visualización completa.")
+                    st.warning(f"Este archivo pesa {tamano_mb:.1f} MB, se recomienda descarga directa para visualización completa.")
                 else:
                     pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
                     st.markdown(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="650" style="border: 1px solid #FFD700; border-radius: 8px;"></iframe>', unsafe_allow_html=True)
@@ -921,7 +937,7 @@ elif st.session_state.tab_activa == "preguntas":
         if archivos_disponibles:
             archivo_especifico = st.selectbox("Selecciona el documento específico:", archivos_disponibles)
         else:
-            st.warning("⚠️ No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
+            st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
 
     pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿De qué marca es la lavadora?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
@@ -931,20 +947,19 @@ elif st.session_state.tab_activa == "preguntas":
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
                 st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                # --- VERIFICACIÓN DE CACHÉ SEMÁNTICO EN PREGUNTAS LIBRES ---
                 clave_filtro_preg = f"PREG|{filtro_linea}|{filtro_area}|{archivo_especifico}"
                 emb_pregunta = obtener_embedding(pregunta_libre)
                 
                 item_cached, sim_score = consultar_cache_semantico(emb_pregunta, clave_filtro_preg, umbral=0.92)
                 
                 if item_cached:
-                    st.info(f"⚡ RESPUESTA RECUPERADA EN <0.5s DESDE CACHÉ SEMÁNTICO (Similitud semántica: {sim_score*100:.1f}%)")
+                    st.info(f"Respuesta recuperada desde caché semántico (Similitud semántica: {sim_score*100:.1f}%)")
                     col_ans1, col_ans2 = st.columns([1.1, 1], gap="medium")
                     
                     with col_ans1:
                         st.markdown(f"<div style='color: white; font-size: 1.05em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
                         if item_cached.get("fragmentos"):
-                            with st.expander("📎 Fuentes consultadas"):
+                            with st.expander("Fuentes consultadas"):
                                 for f in item_cached["fragmentos"]:
                                     pdf_p, p_num = resolver_ruta_y_pagina(f)
                                     st.markdown(f"**{f['tipo']} — {f['archivo']} (Pág. {p_num})**")
@@ -953,17 +968,17 @@ elif st.session_state.tab_activa == "preguntas":
                     with col_ans2:
                         evidencias = item_cached.get("evidencias", [])
                         if evidencias:
-                            st.markdown(f"<h4 style='color: #FFD700;'>🔍 Evidencias Visuales ({len(evidencias)})</h4>", unsafe_allow_html=True)
-                            titulos_tabs = [f"{'🖼️️' if e['tiene_imagen'] else '📄'} Pág. {e['pagina']}" for e in evidencias]
+                            st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales ({len(evidencias)})</h4>", unsafe_allow_html=True)
+                            titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias]
                             tabs = st.tabs(titulos_tabs)
                             
                             for idx, tab in enumerate(tabs):
                                 e = evidencias[idx]
                                 with tab:
                                     if e['tiene_imagen']:
-                                        st.caption("⭐ **Prioridad:** Página con diagramas/fotografías.")
+                                        st.caption("**Prioridad:** Página con diagramas/fotografías.")
                                     else:
-                                        st.caption("📄 Página con referencia en texto.")
+                                        st.caption("Página con referencia en texto.")
                                     
                                     try:
                                         img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
@@ -980,51 +995,51 @@ elif st.session_state.tab_activa == "preguntas":
                             linea=filtro_linea, 
                             area=filtro_area, 
                             archivo=archivo_especifico,
-                            top_k=8, 
+                            top_k=3, 
                             permitir_fallback=permitir_fb
                         )
 
                         if not fragmentos:
-                            st.warning("⚠️ No se encontró información relevante para la consulta solicitada.")
+                            st.warning("No se encontró información relevante para la consulta solicitada.")
                         else:
                             if fragmentos[0].get("es_fallback"):
-                                st.info("ℹ️ Se obtuvieron coincidencias en documentos generales del sistema:")
+                                st.info("Se obtuvieron coincidencias en documentos generales del sistema:")
 
                             contexto_docs = "\n\n".join(f"[Fuente: {f['tipo']} - {f['archivo']}]\n{f['texto']}" for f in fragmentos)
                             
                             sys_prompt_preguntas = (
                                 "Eres el Asistente Técnico Especializado del Sistema VPO en Grupo Modelo / AB InBev, "
-                                "diseñado exclusivamente para líneas de envasado industrial de CERVEZA EN BOTELLA DE VIDRIO.\n\n"
-                                "REGLAS DE RESPUESTA STRICTAS:\n"
-                                "1. Trabajas ÚNICAMENTE en la industria cervecera. JAMÁS bajo ningún motivo menciones productos como leche, jugos, salsas, refrescos, latas o envases PET.\n"
-                                "2. Contextualiza los componentes según la cerveza embotellada. Por ejemplo: las motobombas del pasteurizador sirven para bombear y recircular el agua de las duchas de recargado/calentamiento del túnel de pasteurización para asegurar la estabilización microbiológica de la cerveza en botellas de vidrio.\n"
-                                "3. Sé conciso, directo, sumamente técnico y transparente. Basate de forma directa en el contexto provisto.\n\n"
+                                "diseñado para líneas de envasado industrial de CERVEZA EN BOTELLA DE VIDRIO.\n\n"
+                                "REGLAS ESTRICTAS:\n"
+                                "1. Responde de forma formal, técnica y concisa. Basate exclusivamente en el contexto provisto.\n"
+                                "2. Dominio exclusivo: envasado de cerveza en botella de vidrio. Prohibido mencionar latas, PET o bebidas no cerveceras.\n"
+                                "3. Explica los componentes técnicos vinculados al proceso cervecero (ej. pasteurizadores túnel, contrapresión en llenadoras, torque en coronadoras).\n\n"
                                 f"DOCUMENTACIÓN Y MANUALES OFICIALES VPO:\n{contexto_docs}"
                             )
 
                             try:
-                                if not client_groq:
-                                    raise ValueError("No se configuró la variable GROQ_API_KEY")
-
-                                res = client_groq.chat.completions.create(
-                                    model=MODELO_CHAT,
+                                res = ollama.chat(
+                                    model=MODELO_CHAT, 
                                     messages=[
                                         {'role': 'system', 'content': sys_prompt_preguntas},
                                         {'role': 'user', 'content': pregunta_libre},
-                                    ]
+                                    ],
+                                    options={
+                                        'temperature': 0.1,
+                                        'num_ctx': 2048
+                                    }
                                 )
                                 
-                                texto_res = res.choices[0].message.content
+                                texto_res = res['message']['content']
                                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos)
                                 
-                                # Guardar en Caché Semántico
                                 guardar_en_cache_semantico(emb_pregunta, clave_filtro_preg, texto_res, True, fragmentos, evidencias_calc)
                                 
                                 col_ans1, col_ans2 = st.columns([1.1, 1], gap="medium")
                                 
                                 with col_ans1:
                                     st.markdown(f"<div style='color: white; font-size: 1.05em;'>{texto_res}</div>", unsafe_allow_html=True)
-                                    with st.expander("📎 Fuentes consultadas"):
+                                    with st.expander("Fuentes consultadas"):
                                         for f in fragmentos:
                                             pdf_p, p_num = resolver_ruta_y_pagina(f)
                                             st.markdown(f"**{f['tipo']} — {f['archivo']} (Pág. {p_num})**")
@@ -1032,18 +1047,18 @@ elif st.session_state.tab_activa == "preguntas":
                                 
                                 with col_ans2:
                                     if evidencias_calc:
-                                        st.markdown(f"<h4 style='color: #FFD700;'>🔍 Evidencias Visuales ({len(evidencias_calc)})</h4>", unsafe_allow_html=True)
+                                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales ({len(evidencias_calc)})</h4>", unsafe_allow_html=True)
                                         
-                                        titulos_tabs = [f"{'🖼️' if e['tiene_imagen'] else '📄'} Pág. {e['pagina']}" for e in evidencias_calc]
+                                        titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
                                         tabs = st.tabs(titulos_tabs)
                                         
                                         for idx, tab in enumerate(tabs):
                                             e = evidencias_calc[idx]
                                             with tab:
                                                 if e['tiene_imagen']:
-                                                    st.caption("⭐ **Prioridad:** Página con diagramas/fotografías.")
+                                                    st.caption("**Prioridad:** Página con diagramas/fotografías.")
                                                 else:
-                                                    st.caption("📄 Página con referencia en texto.")
+                                                    st.caption("Página con referencia en texto.")
                                                 
                                                 try:
                                                     img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
@@ -1053,7 +1068,7 @@ elif st.session_state.tab_activa == "preguntas":
                                     else:
                                         st.caption("No se encontraron páginas asociadas en los archivos PDF originales.")
                             except Exception as e:
-                                st.error(f"Error al conectar con la API de Groq: {e}")
+                                st.error(f"Error al conectar con el motor de IA: {e}")
         else:
             st.error("Por favor, escribe una pregunta.")
 
@@ -1062,7 +1077,7 @@ elif st.session_state.tab_activa == "qr":
     st.markdown("<h3>Escáner QR</h3>", unsafe_allow_html=True)
 
     if WEBRTC_DISPONIBLE:
-        st.caption("Apunta la cámara al código QR de la máquina. En cuanto lo detecte, te lleva automáticamente a la Biblioteca de Documentos — no hace falta tomar foto.")
+        st.caption("Apunta la cámara al código QR de la máquina. En cuanto lo detecte, abrirá automáticamente la Biblioteca de Documentos.")
 
         ctx = webrtc_streamer(
             key="lector_qr_vivo",
@@ -1087,16 +1102,79 @@ elif st.session_state.tab_activa == "qr":
                     st.warning(f"Se detectó un código ('{contenido}') pero no coincide con ninguna línea/área conocida. Sigue apuntando a otro QR.")
                     ctx.video_processor.resultado = None
     else:
-        st.warning("La cámara en vivo necesita instalar librerías adicionales en el servidor: `pip install streamlit-webrtc streamlit-autorefresh av`. Mientras tanto, usa el texto manual de abajo.")
+        st.warning("La cámara en vivo necesita instalar librerías adicionales en el servidor: `pip install streamlit-webrtc streamlit-autorefresh av`. Use la entrada manual a continuación.")
 
     st.divider()
-    st.caption("¿La cámara no abre? Escribe el texto del código manualmente:")
+    st.caption("Ingresar el código manualmente:")
 
     col_qr1, col_qr2 = st.columns([3, 1])
     with col_qr1:
         st.text_input("Ingresar o simular código QR manualmente:", placeholder="Ej. Línea 5 Lavadora", key="qr_input_manual", label_visibility="collapsed")
     with col_qr2:
         st.button("PROCESAR QR", type="primary", use_container_width=True, on_click=procesar_qr_manual_callback)
+
+# --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
+elif st.session_state.tab_activa == "subir":
+    st.markdown("<h3>Subir Nuevo Documento a la Biblioteca</h3>", unsafe_allow_html=True)
+    
+    col_up1, col_up2 = st.columns([1, 1], gap="large")
+    
+    with col_up1:
+        st.markdown("#### Categorización del Documento")
+        
+        idx_linea_def = 0 if linea_sel == "Línea 5" else 1
+        linea_dest = st.selectbox(
+            "Línea de Producción:",
+            ["Línea 5", "Línea 6"],
+            index=idx_linea_def,
+            key="upload_linea_sel"
+        )
+        
+        idx_area_def = areas_lista.index(area_sel) if area_sel in areas_lista else 0
+        area_dest = st.selectbox(
+            "Equipo / Área Operativa:",
+            areas_lista,
+            index=idx_area_def,
+            key="upload_area_sel"
+        )
+        
+        tipo_doc_dest = st.selectbox(
+            "Tipo de Documento:",
+            list(TIPO_CARPETA.keys()),
+            key="upload_tipo_doc_sel"
+        )
+        
+        subcarpeta_nombre = TIPO_CARPETA[tipo_doc_dest]
+        st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
+
+    with col_up2:
+        st.markdown("#### Carga de Archivo PDF")
+        archivo_subido = st.file_uploader("Selecciona el archivo PDF de tu computadora:", type=["pdf"], key="file_uploader_vpo")
+        
+        auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
+        
+        btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
+        
+        if btn_guardar_doc:
+            if archivo_subido is not None:
+                carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
+                os.makedirs(carpeta_destino, exist_ok=True)
+                
+                ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
+                
+                with open(ruta_completa_pdf, "wb") as f:
+                    f.write(archivo_subido.getbuffer())
+                
+                st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
+                
+                if auto_index:
+                    with st.spinner("Indexando nuevo documento en la base de datos ChromaDB..."):
+                        tot_arch, tot_chk = indexar_todos_los_documentos()
+                    st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
+                else:
+                    st.info("Recuerde presionar 'Actualizar índice de documentos' en el panel lateral cuando desee que la IA lea este archivo.")
+            else:
+                st.error("Por favor selecciona un archivo PDF antes de presionar Guardar.")
 
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("<center><p style='color: #FFD700; font-weight: bold;'>MELENA | CONFIDENCIAL - Uso exclusivo personal autorizado Grupo Modelo</p></center>", unsafe_allow_html=True)
