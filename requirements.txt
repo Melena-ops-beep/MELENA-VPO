@@ -9,3 +9,4 @@ langchain-community
 langchain-chroma
 torch
 opencv-python-headless
+PyMuPDF
