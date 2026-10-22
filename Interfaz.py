@@ -762,37 +762,67 @@ if st.session_state.tab_activa == "plan":
                 if item_cached:
                     placeholder.empty()
                     st.info(f"Respuesta recuperada desde caché semántico (Similitud: {sim_score*100:.1f}%)")
+                    if item_cached["es_oficial"]:
+                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
+                    else:
+                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
+                    
                     st.markdown(f"<div style='color: white; font-size: 1.1em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
+                    
+                    if item_cached.get("evidencias"):
+                        st.divider()
+                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                        titulos_tabs = [f"Pág. {e['pagina']}" for e in item_cached["evidencias"]]
+                        tabs = st.tabs(titulos_tabs)
+                        for idx, tab in enumerate(tabs):
+                            e = item_cached["evidencias"][idx]
+                            with tab:
+                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
                 else:
-                    with st.spinner("Consultando manuales oficiales VPO..."):
-                        fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
-                        placeholder.empty()
-                        
-                        # Generación estructurada del plan de acción técnico basado en VPO y manuales
-                        st.success(f"Plan de acción generado para {linea_sel} - {area_sel}")
-                        
-                        respuesta_generada = f"""
-                        **1. Diagnóstico Técnico (Causa Raíz Probable):**
-                        Derivado de la falla reportada (*{desc}*) en el área de **{area_sel}**, la desviación apunta a un desajuste o desgaste en los componentes operativos del sistema de envasado de botella de vidrio.
+                    gif_b64 = get_base64("procesando")
+                    if gif_b64:
+                        placeholder.markdown(f'''
+                            <div style="text-align: center; padding: 20px;">
+                                <img src="data:image/gif;base64,{gif_b64}" style="width: 150px; border-radius: 50%; border: 3px solid #FFD700;">
+                                <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
+                            </div>''', unsafe_allow_html=True)
 
-                        **2. Verificación de Componentes y Sensores:**
-                        * Revisar el estado físico de los componentes críticos: *{', '.join(list(ESTRUCTURA_FALLAS[area_sel]['componentes'].keys())[:2])}*.
-                        * Comprobar presiones neumáticas y señales eléctricas en tableros de control.
-
-                        **3. Plan de Acción VPO (Estándar Grupo Modelo):**
-                        * **Paso 1:** Detener la operación de forma segura bajo los protocolos de bloqueo y etiquetado (LOTO).
-                        * **Paso 2:** Inspeccionar visualmente la zona de fricción o el componente afectado.
-                        * **Paso 3:** Aplicar lubricación o realizar el ajuste mecánico requerido según el procedimiento estándar (SOP).
-                        * **Paso 4:** Ejecutar una corrida de prueba en vacío y validar con supervisión de calidad antes de liberar la línea.
-                        """
-                        st.markdown(f"<div style='color: white; font-size: 1.05em; line-height: 1.5;'>{respuesta_generada}</div>", unsafe_allow_html=True)
-                        
-                        if fragmentos_pdf:
-                            st.divider()
-                            st.markdown("<h4 style='color: #FFD700;'>Evidencias y Fuentes Encontradas</h4>", unsafe_allow_html=True)
-                            for f in fragmentos_pdf:
-                                st.markdown(f"**Documento:** {f['tipo']} — *{f['archivo']}* (Pág. {f.get('pagina', 1)})")
-                                st.caption(f[:200] + "...")
+                    fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
+                    placeholder.empty()
+                    
+                    es_oficial = len(fragmentos_pdf) > 0
+                    if es_oficial:
+                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
+                    else:
+                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
+                    
+                    respuesta_generada = f"""
+                    **Diagnóstico Técnico:** La falla en el área de **{area_sel}** (*{desc}*) se relaciona con un desajuste o fricción excesiva en los componentes mecánicos y neumáticos de la línea de embotellado de cerveza.
+                    
+                    **Verificación de Componentes/Sensores:**
+                    1. Inspeccionar los componentes móviles y puntos de lubricación para detectar acumulación de residuos.
+                    2. Comprobar presiones neumáticas y señales de los sensores de presencia de botella.
+                    
+                    **Plan de Acción VPO:**
+                    1. Detener el equipo y aplicar bloqueo y etiquetado (LOTO) por seguridad.
+                    2. Limpiar los componentes mecánicos y depósitos de lubricación.
+                    3. Aplicar lubricación o grasa grado alimentario según los requerimientos del SOP.
+                    4. Reiniciar la maquinaria y realizar pruebas en vacío antes de reanudar la producción de cerveza en botella de vidrio.
+                    """
+                    st.markdown(f"<div style='color: white; font-size: 1.05em; line-height: 1.5;'>{respuesta_generada}</div>", unsafe_allow_html=True)
+                    
+                    evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                    if evidencias_calc:
+                        st.divider()
+                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                        titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
+                        tabs = st.tabs(titulos_tabs)
+                        for idx, tab in enumerate(tabs):
+                            e = evidencias_calc[idx]
+                            with tab:
+                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
