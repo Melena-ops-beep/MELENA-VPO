@@ -6,17 +6,8 @@ import unicodedata
 import numpy as np
 from pypdf import PdfReader
 import chromadb
-import cv2
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
 from sentence_transformers import SentenceTransformer
-
-try:
-    import av
-    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
-    from streamlit_autorefresh import st_autorefresh
-    WEBRTC_DISPONIBLE = True
-except ImportError:
-    WEBRTC_DISPONIBLE = False
 
 # --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -119,20 +110,6 @@ def parsear_codigo_qr(qr_raw):
 
     return linea_detectada, area_detectada
 
-if WEBRTC_DISPONIBLE:
-    class ProcesadorQR(VideoProcessorBase):
-        def __init__(self):
-            self.resultado = None
-            self.detector = cv2.QRCodeDetector()
-
-        def recv(self, frame):
-            imagen = frame.to_ndarray(format="bgr24")
-            if self.resultado is None:
-                contenido, _puntos, _ = self.detector.detectAndDecode(imagen)
-                if contenido:
-                    self.resultado = contenido
-            return av.VideoFrame.from_ndarray(imagen, format="bgr24")
-
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
 def cargar_modelo_embedding():
@@ -197,20 +174,10 @@ if "tab_activa" not in st.session_state:
 if "area_sel" not in st.session_state or st.session_state["area_sel"] not in areas_lista:
     st.session_state["area_sel"] = areas_lista[0]
 
-if "_pendiente_linea" in st.session_state:
-    st.session_state["linea_sel"] = st.session_state.pop("_pendiente_linea")
-if "_pendiente_area" in st.session_state:
-    st.session_state["area_sel"] = st.session_state.pop("_pendiente_area")
-
-def procesar_qr_manual_callback():
-    texto = st.session_state.get("qr_input_manual", "").strip()
-    if texto:
-        linea_det, area_det = parsear_codigo_qr(texto)
-        if linea_det:
-            st.session_state["linea_sel"] = linea_det
-        if area_det:
-            st.session_state["area_sel"] = area_det
-        st.session_state["tab_activa"] = "docs"
+if "mensajes_chat" not in st.session_state:
+    st.session_state["mensajes_chat"] = [
+        {"role": "assistant", "content": "Hola. Soy tu asistente técnico de VPO especializado en envasado de cerveza en botella de vidrio. ¿Qué avería o seguimiento deseas consultar?"}
+    ]
 
 if "qr_scanned" in st.query_params:
     qr_val = str(st.query_params.get("qr_scanned", "")).strip()
@@ -457,32 +424,8 @@ sidebar_css = f'background-image: url("data:image/png;base64,{fondo_sidebar}"); 
 _icono_generador_b64 = get_base64("icono_generador")
 _icono_biblioteca_b64 = get_base64("icono_biblioteca")
 _icono_preguntar_b64 = get_base64("icono_preguntar")
-_icono_escanear_b64 = get_base64("escanear")
+_icono_chat_b64 = get_base64("icono_preguntar")
 _icono_subir_b64 = get_base64("subir")
-_icono_advertencia_b64 = get_base64("advertencia")
-
-_icono_ver_b64 = get_base64("icono_ver")
-_icono_descargar_b64 = get_base64("icono_descargar")
-
-css_icono_ver = f"""
-div[class*="st-key-btn_ver_doc_"] > button {{
-    background-image: url("data:image/png;base64,{_icono_ver_b64}") !important;
-    background-repeat: no-repeat !important;
-    background-position: 14px center !important;
-    background-size: 22px 22px !important;
-    padding-left: 44px !important;
-}}
-""" if _icono_ver_b64 else ""
-
-css_icono_descargar = f"""
-div[data-testid="stDownloadButton"] > button {{
-    background-image: url("data:image/png;base64,{_icono_descargar_b64}") !important;
-    background-repeat: no-repeat !important;
-    background-position: 14px center !important;
-    background-size: 22px 22px !important;
-    padding-left: 44px !important;
-}}
-""" if _icono_descargar_b64 else ""
 
 # --- ESTILOS CSS GLOBALES ---
 st.markdown(f"""
@@ -509,18 +452,6 @@ st.markdown(f"""
 
     .block-container {{ padding-top: 1rem !important; }}
 
-    div[data-testid="stCheckbox"] input[type="checkbox"]:checked {{
-        accent-color: #0056b3 !important;
-    }}
-    div[data-baseweb="checkbox"] div[aria-checked="true"] {{
-        background-color: #0056b3 !important;
-        border-color: #0056b3 !important;
-    }}
-    div[data-testid="stCheckbox"] div[aria-checked="true"] {{
-        background-color: #0056b3 !important;
-        border-color: #0056b3 !important;
-    }}
-
     div[data-testid="stButton"] > button[kind="secondary"], 
     div[data-testid="stDownloadButton"] > button {{
         background-color: #222222 !important;
@@ -537,12 +468,6 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
-    div[data-testid="stButton"] > button[kind="secondary"] *, 
-    div[data-testid="stDownloadButton"] > button * {{
-        color: #FFFFFF !important;
-        fill: #FFFFFF !important;
-    }}
-
     div[data-testid="stButton"] > button[kind="primary"] {{
         background-color: #FFD700 !important;
         border: 2px solid #FFD700 !important;
@@ -557,28 +482,6 @@ st.markdown(f"""
         box-shadow: 0 0 14px rgba(255, 215, 0, 0.9) !important;
         width: 100% !important;
     }}
-
-    div[data-testid="stButton"] > button[kind="primary"] * {{
-        color: #000000 !important;
-        fill: #000000 !important;
-        font-weight: bold !important;
-    }}
-
-    div[data-testid="stButton"] > button:hover, 
-    div[data-testid="stDownloadButton"] > button:hover {{
-        background-color: #FFD700 !important;
-        color: #000000 !important;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.8) !important;
-    }}
-
-    div[data-testid="stButton"] > button:hover *, 
-    div[data-testid="stDownloadButton"] > button:hover * {{
-        color: #000000 !important;
-        fill: #000000 !important;
-    }}
-
-    {css_icono_ver}
-    {css_icono_descargar}
 
     hr {{ border-top: 2px solid #FFD700 !important; }}
     
@@ -670,32 +573,12 @@ with st.sidebar:
             archivos, chunks = indexar_todos_los_documentos()
         st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
 
-# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES ---
-def _css_icono_boton(clave_boton, icono_b64):
-    if not icono_b64: return ""
-    return f"""
-    .st-key-{clave_boton} button {{
-        background-image: url(data:image/png;base64,{icono_b64});
-        background-repeat: no-repeat; background-position: 12px center; background-size: 24px 24px;
-        text-align: left !important; padding-left: 46px !important;
-    }}
-    """
-
-st.markdown(f"""
-    <style>
-    {_css_icono_boton("btn_tab_plan", _icono_generador_b64)}
-    {_css_icono_boton("btn_tab_docs", _icono_biblioteca_b64)}
-    {_css_icono_boton("btn_tab_preguntas", _icono_preguntar_b64)}
-    {_css_icono_boton("btn_tab_qr", _icono_escanear_b64)}
-    {_css_icono_boton("btn_tab_subir", _icono_subir_b64)}
-    </style>
-""", unsafe_allow_html=True)
-
-_tab = st.session_state["tab_activa"]
+# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
+_tab = st.session_state.get("tab_activa", "plan")
 p_plan = (_tab == "plan")
 p_docs = (_tab == "docs")
 p_preg = (_tab == "preguntas")
-p_qr = (_tab == "qr")
+p_chat = (_tab == "chat")
 p_subir = (_tab == "subir")
 
 menu_col1, menu_col2, menu_col3, menu_col4, menu_col5 = st.columns(5)
@@ -713,8 +596,8 @@ with menu_col3:
         st.session_state.tab_activa = "preguntas"
         st.rerun()
 with menu_col4:
-    if st.button("Escanear Código QR", key="btn_tab_qr", type="primary" if p_qr else "secondary", use_container_width=True):
-        st.session_state.tab_activa = "qr"
+    if st.button("Chat IA Seguimiento", key="btn_tab_chat", type="primary" if p_chat else "secondary", use_container_width=True):
+        st.session_state.tab_activa = "chat"
         st.rerun()
 with menu_col5:
     if st.button("Subir un documento", key="btn_tab_subir", type="primary" if p_subir else "secondary", use_container_width=True):
@@ -738,14 +621,11 @@ if st.session_state.tab_activa == "plan":
 
         with col_componentes:
             st.markdown("<p style='font-weight: bold; color: #FFD700; margin-bottom: 6px; font-size: 0.9em;'>Componentes críticos de la máquina:</p>", unsafe_allow_html=True)
-            
             comp_list = list(ESTRUCTURA_FALLAS[area_sel]["componentes"].keys())
-            
             html_componentes = "<div class='caja-componentes'>"
             for comp in comp_list:
                 html_componentes += f"<p style='margin: 0 0 4px 0; font-size: 0.85em; color: #FFFFFF;'>• {comp}</p>"
             html_componentes += "</div>"
-            
             st.markdown(html_componentes, unsafe_allow_html=True)
 
     with c2:
@@ -757,47 +637,24 @@ if st.session_state.tab_activa == "plan":
                 clave_filtro_plan = f"PLAN|{linea_sel}|{area_sel}"
                 emb_consulta = obtener_embedding(consulta_texto)
                 
-                item_cached, sim_score = consultar_cache_semantico(emb_consulta, clave_filtro_plan, umbral=0.92)
-                
-                if item_cached:
-                    placeholder.empty()
-                    st.info(f"Respuesta recuperada desde caché semántico (Similitud: {sim_score*100:.1f}%)")
-                    if item_cached["es_oficial"]:
-                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                    else:
-                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
-                    
-                    st.markdown(f"<div style='color: white; font-size: 1.1em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
-                    
-                    if item_cached.get("evidencias"):
-                        st.divider()
-                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
-                        titulos_tabs = [f"Pág. {e['pagina']}" for e in item_cached["evidencias"]]
-                        tabs = st.tabs(titulos_tabs)
-                        for idx, tab in enumerate(tabs):
-                            e = item_cached["evidencias"][idx]
-                            with tab:
-                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
-                else:
-                    gif_b64 = get_base64("procesando")
-                    if gif_b64:
-                        placeholder.markdown(f'''
-                            <div style="text-align: center; padding: 20px;">
-                                <img src="data:image/gif;base64,{gif_b64}" style="width: 150px; border-radius: 50%; border: 3px solid #FFD700;">
-                                <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
-                            </div>''', unsafe_allow_html=True)
+                gif_b64 = get_base64("procesando")
+                if gif_b64:
+                    placeholder.markdown(f'''
+                        <div style="text-align: center; padding: 20px;">
+                            <img src="data:image/gif;base64,{gif_b64}" style="width: 150px; border-radius: 50%; border: 3px solid #FFD700;">
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
+                        </div>''', unsafe_allow_html=True)
 
-                    fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
-                    placeholder.empty()
-                    
-                    es_oficial = len(fragmentos_pdf) > 0
-                    if es_oficial:
-                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                    else:
-                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
-                    
-                    respuesta_generada = f"""
+                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
+                placeholder.empty()
+                
+                es_oficial = len(fragmentos_pdf) > 0
+                if es_oficial:
+                    st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
+                else:
+                    st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
+                
+                respuesta_generada = f"""
 **Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** se asocia a un desajuste operativo o falta de lubricación en el sistema de envasado de botella de vidrio.
 
 **Verificación de Componentes y Sensores:**
@@ -810,19 +667,19 @@ if st.session_state.tab_activa == "plan":
 3. Aplicar lubricante o grasa grado alimentario según las directrices del SOP.
 4. Efectuar una corrida de prueba en vacío antes de autorizar el arranque de la línea.
 """
-                    st.markdown(respuesta_generada)
-                    
-                    evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
-                    if evidencias_calc:
-                        st.divider()
-                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
-                        titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
-                        tabs = st.tabs(titulos_tabs)
-                        for idx, tab in enumerate(tabs):
-                            e = evidencias_calc[idx]
-                            with tab:
-                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
+                st.markdown(respuesta_generada)
+                
+                evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                if evidencias_calc:
+                    st.divider()
+                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                    titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
+                    tabs = st.tabs(titulos_tabs)
+                    for idx, tab in enumerate(tabs):
+                        e = evidencias_calc[idx]
+                        with tab:
+                            img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                            st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -847,45 +704,41 @@ elif st.session_state.tab_activa == "preguntas":
     pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Cómo realizo lubricación?", height=100)
     if st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary"):
         if pregunta_libre.strip():
-            st.success("Respuesta técnica basada en normativa VPO:")
-            st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la lubricación de forma adecuada en los equipos de envasado, asegúrese de utilizar grasa grado alimentario autorizada, verificar los puntos de engrase centralizado y cumplir estrictamente con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
+            fragmentos = buscar_contexto(pregunta_libre, linea=linea_sel, area=area_sel, top_k=3)
+            if fragmentos:
+                st.success("Respuesta técnica basada en normativa VPO:")
+                st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la lubricación de forma adecuada en los equipos de envasado, asegúrese de utilizar grasa grado alimentario autorizada y cumplir con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
+                st.divider()
+                st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
+                evidencias = obtener_evidencias_priorizadas(fragmentos)
+                for e in evidencias:
+                    img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                    st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
+            else:
+                st.warning("No se encontraron documentos indexados para responder. Asegúrese de actualizar el índice en la barra lateral.")
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: ESCÁNER QR ---
-elif st.session_state.tab_activa == "qr":
-    st.markdown("<h3>Escáner QR</h3>", unsafe_allow_html=True)
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
+elif st.session_state.tab_activa == "chat":
+    st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
+    st.caption("Conversa en tiempo reale con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
 
-    if WEBRTC_DISPONIBLE:
-        st.caption("Apunta la cámara al código QR de la máquina. Configurado con STUN Server.")
-        ctx = webrtc_streamer(
-            key="lector_qr_vivo",
-            mode=WebRtcMode.SENDRECV,
-            video_processor_factory=ProcesadorQR,
-            media_stream_constraints={"video": True, "audio": False},
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-        )
-        if ctx.state.playing:
-            st_autorefresh(interval=700, key="autorefresco_qr")
-            if ctx.video_processor and ctx.video_processor.resultado:
-                contenido = ctx.video_processor.resultado
-                linea_det, area_det = parsear_codigo_qr(contenido)
-                if linea_det and area_det:
-                    st.success(f"Código leído: {linea_det} — {area_det}. Abriendo Biblioteca...")
-                    st.session_state["_pendiente_linea"] = linea_det
-                    st.session_state["_pendiente_area"] = area_det
-                    st.session_state["tab_activa"] = "docs"
-                    st.rerun()
-    else:
-        st.warning("La cámara en vivo requiere las librerías WebRTC instaladas.")
+    for mensaje in st.session_state["mensajes_chat"]:
+        with st.chat_message(mensaje["role"]):
+            st.markdown(mensaje["content"])
 
-    st.divider()
-    st.caption("O ingresa el código manualmente:")
-    col_qr1, col_qr2 = st.columns([3, 1])
-    with col_qr1:
-        st.text_input("Ingresar código QR:", placeholder="Ej. Línea 5 Lavadora", key="qr_input_manual", label_visibility="collapsed")
-    with col_qr2:
-        st.button("PROCESAR QR", type="primary", use_container_width=True, on_click=procesar_qr_manual_callback)
+    if prompt_chat := st.chat_input("Escribe tu seguimiento o duda técnica..."):
+        st.session_state["mensajes_chat"].append({"role": "user", "content": prompt_chat})
+        with st.chat_message("user"):
+            st.markdown(prompt_chat)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analizando historial de averías..."):
+                fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
+                respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, verifique las tolerancias mecánicas y ejecute la validación con calidad antes de liberar la producción de cerveza en botella de vidrio."
+                st.markdown(respuesta_chat)
+                st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
 # --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
 elif st.session_state.tab_activa == "subir":
@@ -893,7 +746,11 @@ elif st.session_state.tab_activa == "subir":
     archivo_subido = st.file_uploader("Selecciona el archivo PDF:", type=["pdf"])
     if st.button("GUARDAR DOCUMENTO", type="primary"):
         if archivo_subido:
-            st.success("Archivo subido con éxito.")
+            carpeta_destino = os.path.join(DOCS_DIR, linea_sel, area_sel, "Manuales")
+            os.makedirs(carpeta_destino, exist_ok=True)
+            with open(os.path.join(carpeta_destino, archivo_subido.name), "wb") as f:
+                f.write(archivo_subido.getbuffer())
+            st.success("Archivo subido con éxito a la biblioteca.")
         else:
             st.error("Selecciona un archivo PDF.")
 
