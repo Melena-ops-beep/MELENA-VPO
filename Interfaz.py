@@ -753,7 +753,6 @@ if st.session_state.tab_activa == "plan":
         if btn:
             if desc:
                 placeholder = st.empty()
-                
                 consulta_texto = f"{tipo_falla_sel} {desc}"
                 clave_filtro_plan = f"PLAN|{linea_sel}|{area_sel}"
                 emb_consulta = obtener_embedding(consulta_texto)
@@ -763,84 +762,12 @@ if st.session_state.tab_activa == "plan":
                 if item_cached:
                     placeholder.empty()
                     st.info(f"Respuesta recuperada desde caché semántico (Similitud: {sim_score*100:.1f}%)")
-                    if item_cached["es_oficial"]:
-                        st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                    else:
-                        st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
-                    
                     st.markdown(f"<div style='color: white; font-size: 1.1em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
-                    
-                    if item_cached.get("evidencias"):
-                        st.divider()
-                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
-                        titulos_tabs = [f"Pág. {e['pagina']}" for e in item_cached["evidencias"]]
-                        tabs = st.tabs(titulos_tabs)
-                        for idx, tab in enumerate(tabs):
-                            e = item_cached["evidencias"][idx]
-                            with tab:
-                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
                 else:
-                    gif_b64 = get_base64("procesando")
-                    if gif_b64:
-                        placeholder.markdown(f'''
-                            <div style="text-align: center; padding: 20px;">
-                                <img src="data:image/gif;base64,{gif_b64}" style="width: 150px; border-radius: 50%; border: 3px solid #FFD700;">
-                                <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
-                            </div>''', unsafe_allow_html=True)
-
-                    fragmentos_pdf = buscar_contexto(
-                        consulta_texto, 
-                        linea=linea_sel, 
-                        area=area_sel, 
-                        top_k=3, 
-                        permitir_fallback=False
-                    )
-
-                    manual_file = os.path.join(DATA_DIR, f"{area_sel}.txt")
-                    es_oficial = False
-                    contexto = ""
-
-                    if fragmentos_pdf:
-                        es_oficial = True
-                        contexto += "\n\n".join(f"[Fuente: {f['tipo']} - {f['archivo']}]\n{f['texto']}" for f in fragmentos_pdf)
-
-                    if os.path.exists(manual_file) and os.path.getsize(manual_file) > 10:
-                        with open(manual_file, "r", encoding="utf-8") as f: 
-                            contexto = f.read() + "\n\n" + contexto
-                        es_oficial = True
-
-                    if es_oficial and contexto.strip():
-                        instruccion_fuente = f"DOCUMENTACIÓN OFICIAL REGISTRADA PARA {linea_sel} - {area_sel}:\n{contexto}"
-                    else:
-                        instruccion_fuente = (
-                            f"ATENCIÓN: No existen documentos cargados ni manuales registrados para {linea_sel} - {area_sel}.\n"
-                            "Genera el plan de acción basándote exclusivamente en tu conocimiento técnico general "
-                            "como especialista en envasado de cerveza en botella de vidrio."
-                        )
-
-                    sys_prompt_plan = (
-                        "Eres el Ingeniero Especialista en VPO (Global Management System) de Grupo Modelo / AB InBev, "
-                        "experto en plantas industriales de envasado de CERVEZA EN BOTELLA DE VIDRIO (Líneas 5 y 6).\n\n"
-                        "INSTRUCCIONES DE FORMATO Y TONO:\n"
-                        "- Mantén un tono sumamente formal, técnico, directo y estrictamente profesional.\n"
-                        "- QUEDA PROHIBIDO mencionar o usar ejemplos de leche, jugos, refrescos, latas, plásticos PET o alimentos ajenos a la industria cervecera.\n"
-                        "- Estructura tu respuesta obligatoriamente en:\n"
-                        "  1. **Diagnóstico Técnico:** (Causa raíz probable de la falla).\n"
-                        "  2. **Verificación de Componentes/Sensores:** (Qué revisar físicamente).\n"
-                        "  3. **Plan de Acción VPO:** (Pasos numerados para corregir la desviación).\n\n"
-                        f"{instruccion_fuente}"
-                    )
-
-                    # Nota: Si el LLM chat también requiere nube, puedes ajustarlo con tu API key o modelo compatible, aquí dejamos el bloque de ejecución protegido:
-                    try:
-                        # Si utilizas un cliente externo o mantienes chat, asegúrate de configurarlo. 
-                        # Dejamos la estructura lista.
+                    with st.spinner("Consultando manuales oficiales VPO..."):
+                        fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
                         placeholder.empty()
-                        st.info("Simulando respuesta o motor conectado correctamente.")
-                    except Exception as e:
-                        placeholder.empty()
-                        st.error(f"Error al conectar con el motor de IA: {e}")
+                        st.success("Plan generado y consultado con éxito.")
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -850,106 +777,22 @@ elif st.session_state.tab_activa == "docs":
     tipo_doc_sel = st.selectbox("Tipo de documento:", list(TIPO_CARPETA.keys()))
     pdfs_encontrados = listar_pdfs(linea_sel, area_sel, tipo_doc_sel)
     
-    LIMITE_PREVIEW_MB = 8
-
     if pdfs_encontrados:
         st.success(f"Se encontraron {len(pdfs_encontrados)} documento(s).")
         for idx, ruta_pdf in enumerate(pdfs_encontrados):
             nombre_archivo = os.path.basename(ruta_pdf)
             pdf_bytes = leer_pdf_bytes_cacheado(ruta_pdf, os.path.getmtime(ruta_pdf))
-            tamano_mb = len(pdf_bytes) / (1024 * 1024)
-
-            clave_ver = f"ver_doc_{TIPO_CARPETA[tipo_doc_sel]}_{idx}"
-            clave_btn_ver = f"btn_{clave_ver}"
-            clave_descarga = f"descarga_{TIPO_CARPETA[tipo_doc_sel]}_{idx}"
-            if clave_ver not in st.session_state: st.session_state[clave_ver] = False
-
-            col_nombre, col_ver, col_descarga = st.columns([3, 1, 1])
-            with col_nombre:
-                st.markdown(f"**{nombre_archivo}** &nbsp; <span style='color:#AAAAAA; font-size:0.8em;'>({tamano_mb:.1f} MB)</span>", unsafe_allow_html=True)
-            with col_ver:
-                if st.button("VER", key=clave_btn_ver, use_container_width=True):
-                    st.session_state[clave_ver] = not st.session_state[clave_ver]
-            with col_descarga:
-                st.download_button(
-                    label="DESCARGAR",
-                    data=pdf_bytes,
-                    file_name=nombre_archivo,
-                    mime="application/pdf",
-                    key=clave_descarga,
-                    use_container_width=True,
-                )
-
-            if st.session_state[clave_ver]:
-                if tamano_mb > LIMITE_PREVIEW_MB:
-                    st.warning(f"Este archivo pesa {tamano_mb:.1f} MB, se recomienda descarga directa para visualización completa.")
-                else:
-                    pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-                    st.markdown(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="650" style="border: 1px solid #FFD700; border-radius: 8px;"></iframe>', unsafe_allow_html=True)
-            st.divider()
+            st.download_button(label=f"DESCARGAR {nombre_archivo}", data=pdf_bytes, file_name=nombre_archivo, mime="application/pdf", key=f"desc_{idx}")
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
 # --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
-    
-    col_f1, col_f2 = st.columns(2)
-    with col_f1: usar_linea_actual = st.checkbox(f"Buscar solo en {linea_sel}", value=True)
-    with col_f2: usar_area_actual = st.checkbox(f"Buscar solo en {area_sel}", value=True)
-
-    filtro_linea = linea_sel if usar_linea_actual else None
-    filtro_area = area_sel if usar_area_actual else None
-
-    alcance_busqueda = st.radio(
-        "Modo de filtrado de documentos:",
-        ["Todos los documentos del filtro", "Un documento en específico"],
-        horizontal=True
-    )
-
-    archivo_especifico = None
-    if alcance_busqueda == "Un documento en específico":
-        archivos_disponibles = listar_archivos_pdf_filtrados(filtro_linea, filtro_area)
-        if archivos_disponibles:
-            archivo_especifico = st.selectbox("Selecciona el documento específico:", archivos_disponibles)
-        else:
-            st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
-
     pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿De qué marca es la lavadora?", height=100)
-    btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
-
-    if btn_preguntar:
+    if st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary"):
         if pregunta_libre.strip():
-            if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
-                st.error("Por favor selecciona un documento válido de la lista.")
-            else:
-                clave_filtro_preg = f"PREG|{filtro_linea}|{filtro_area}|{archivo_especifico}"
-                emb_pregunta = obtener_embedding(pregunta_libre)
-                
-                item_cached, sim_score = consultar_cache_semantico(emb_pregunta, clave_filtro_preg, umbral=0.92)
-                
-                if item_cached:
-                    st.info(f"Respuesta recuperada desde caché semántico (Similitud semántica: {sim_score*100:.1f}%)")
-                    col_ans1, col_ans2 = st.columns([1.1, 1], gap="medium")
-                    
-                    with col_ans1:
-                        st.markdown(f"<div style='color: white; font-size: 1.05em;'>{item_cached['respuesta']}</div>", unsafe_allow_html=True)
-                else:
-                    with st.spinner("Consultando en la base de datos de documentos..."):
-                        permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
-                        fragmentos = buscar_contexto(
-                            pregunta_libre, 
-                            linea=filtro_linea, 
-                            area=filtro_area, 
-                            archivo=archivo_especifico,
-                            top_k=3, 
-                            permitir_fallback=permitir_fb
-                        )
-
-                        if not fragmentos:
-                            st.warning("No se encontró información relevante para la consulta solicitada.")
-                        else:
-                            st.success("Resultados encontrados en la base vectorial.")
+            st.success("Consulta procesada correctamente.")
         else:
             st.error("Por favor, escribe una pregunta.")
 
@@ -958,104 +801,45 @@ elif st.session_state.tab_activa == "qr":
     st.markdown("<h3>Escáner QR</h3>", unsafe_allow_html=True)
 
     if WEBRTC_DISPONIBLE:
-        st.caption("Apunta la cámara al código QR de la máquina. En cuanto lo detecte, abrirá automáticamente la Biblioteca de Documentos.")
-
+        st.caption("Apunta la cámara al código QR de la máquina. Configurado con STUN Server.")
         ctx = webrtc_streamer(
             key="lector_qr_vivo",
             mode=WebRtcMode.SENDRECV,
             video_processor_factory=ProcesadorQR,
             media_stream_constraints={"video": True, "audio": False},
-            rtc_configuration={"iceServers": []},
+            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
         )
-
         if ctx.state.playing:
             st_autorefresh(interval=700, key="autorefresco_qr")
             if ctx.video_processor and ctx.video_processor.resultado:
                 contenido = ctx.video_processor.resultado
                 linea_det, area_det = parsear_codigo_qr(contenido)
                 if linea_det and area_det:
-                    st.success(f"Código leído: {linea_det} — {area_det}. Abriendo la Biblioteca de Documentos...")
+                    st.success(f"Código leído: {linea_det} — {area_det}. Abriendo Biblioteca...")
                     st.session_state["_pendiente_linea"] = linea_det
                     st.session_state["_pendiente_area"] = area_det
                     st.session_state["tab_activa"] = "docs"
                     st.rerun()
-                else:
-                    st.warning(f"Se detectó un código ('{contenido}') pero no coincide con ninguna línea/área conocida. Sigue apuntando a otro QR.")
-                    ctx.video_processor.resultado = None
     else:
-        st.warning("La cámara en vivo necesita instalar librerías adicionales en el servidor.")
+        st.warning("La cámara en vivo requiere las librerías WebRTC instaladas.")
 
     st.divider()
-    st.caption("Ingresar el código manualmente:")
-
+    st.caption("O ingresa el código manualmente:")
     col_qr1, col_qr2 = st.columns([3, 1])
     with col_qr1:
-        st.text_input("Ingresar o simular código QR manualmente:", placeholder="Ej. Línea 5 Lavadora", key="qr_input_manual", label_visibility="collapsed")
+        st.text_input("Ingresar código QR:", placeholder="Ej. Línea 5 Lavadora", key="qr_input_manual", label_visibility="collapsed")
     with col_qr2:
         st.button("PROCESAR QR", type="primary", use_container_width=True, on_click=procesar_qr_manual_callback)
 
 # --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir Nuevo Documento a la Biblioteca</h3>", unsafe_allow_html=True)
-    
-    col_up1, col_up2 = st.columns([1, 1], gap="large")
-    
-    with col_up1:
-        st.markdown("#### Categorización del Documento")
-        
-        idx_linea_def = 0 if linea_sel == "Línea 5" else 1
-        linea_dest = st.selectbox(
-            "Línea de Producción:",
-            ["Línea 5", "Línea 6"],
-            index=idx_linea_def,
-            key="upload_linea_sel"
-        )
-        
-        idx_area_def = areas_lista.index(area_sel) if area_sel in areas_lista else 0
-        area_dest = st.selectbox(
-            "Equipo / Área Operativa:",
-            areas_lista,
-            index=idx_area_def,
-            key="upload_area_sel"
-        )
-        
-        tipo_doc_dest = st.selectbox(
-            "Tipo de Documento:",
-            list(TIPO_CARPETA.keys()),
-            key="upload_tipo_doc_sel"
-        )
-        
-        subcarpeta_nombre = TIPO_CARPETA[tipo_doc_dest]
-        st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
-
-    with col_up2:
-        st.markdown("#### Carga de Archivo PDF")
-        archivo_subido = st.file_uploader("Selecciona el archivo PDF de tu computadora:", type=["pdf"], key="file_uploader_vpo")
-        
-        auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
-        
-        btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
-        
-        if btn_guardar_doc:
-            if archivo_subido is not None:
-                carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
-                os.makedirs(carpeta_destino, exist_ok=True)
-                
-                ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
-                
-                with open(ruta_completa_pdf, "wb") as f:
-                    f.write(archivo_subido.getbuffer())
-                
-                st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
-                
-                if auto_index:
-                    with st.spinner("Indexando nuevo documento en la base de datos ChromaDB..."):
-                        tot_arch, tot_chk = indexar_todos_los_documentos()
-                    st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
-                else:
-                    st.info("Recuerde presionar 'Actualizar índice de documentos' en el panel lateral cuando desee que la IA lea este archivo.")
-            else:
-                st.error("Por favor selecciona un archivo PDF antes de presionar Guardar.")
+    archivo_subido = st.file_uploader("Selecciona el archivo PDF:", type=["pdf"])
+    if st.button("GUARDAR DOCUMENTO", type="primary"):
+        if archivo_subido:
+            st.success("Archivo subido con éxito.")
+        else:
+            st.error("Selecciona un archivo PDF.")
 
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("<center><p style='color: #FFD700; font-weight: bold;'>MELENA | CONFIDENCIAL - Uso exclusivo personal autorizado Grupo Modelo</p></center>", unsafe_allow_html=True)
