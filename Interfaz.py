@@ -798,19 +798,19 @@ if st.session_state.tab_activa == "plan":
                         st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                     
                     respuesta_generada = f"""
-                    **Diagnóstico Técnico:** La falla en el área de **{area_sel}** (*{desc}*) se relaciona con un desajuste o fricción excesiva en los componentes mecánicos y neumáticos de la línea de embotellado de cerveza.
-                    
-                    **Verificación de Componentes/Sensores:**
-                    1. Inspeccionar los componentes móviles y puntos de lubricación para detectar acumulación de residuos.
-                    2. Comprobar presiones neumáticas y señales de los sensores de presencia de botella.
-                    
-                    **Plan de Acción VPO:**
-                    1. Detener el equipo y aplicar bloqueo y etiquetado (LOTO) por seguridad.
-                    2. Limpiar los componentes mecánicos y depósitos de lubricación.
-                    3. Aplicar lubricación o grasa grado alimentario según los requerimientos del SOP.
-                    4. Reiniciar la maquinaria y realizar pruebas en vacío antes de reanudar la producción de cerveza en botella de vidrio.
-                    """
-                    st.markdown(f"<div style='color: white; font-size: 1.05em; line-height: 1.5;'>{respuesta_generada}</div>", unsafe_allow_html=True)
+**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** se asocia a un desajuste operativo o falta de lubricación en el sistema de envasado de botella de vidrio.
+
+**Verificación de Componentes y Sensores:**
+1. Inspeccionar componentes mecánicos móviles en busca de fricción o desgaste prematuro.
+2. Comprobar presiones neumáticas y el estado de los puntos de lubricación centralizada.
+
+**Plan de Acción VPO:**
+1. Detener el equipo conforme a los protocolos de seguridad industrial y bloqueo (LOTO).
+2. Limpiar la zona afectada de residuos de vidrio o humedad.
+3. Aplicar lubricante o grasa grado alimentario según las directrices del SOP.
+4. Efectuar una corrida de prueba en vacío antes de autorizar el arranque de la línea.
+"""
+                    st.markdown(respuesta_generada)
                     
                     evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
                     if evidencias_calc:
