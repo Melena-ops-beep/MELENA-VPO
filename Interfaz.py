@@ -18,8 +18,8 @@ try:
 except ImportError:
     WEBRTC_DISPONIBLE = False
 
-# --- CONFIGURACIÓN DE RUTAS ---
-BASE_DIR = r"C:\Residencia_IA"
+# --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMG_DIR = os.path.join(BASE_DIR, "img")
 DATA_DIR = os.path.join(BASE_DIR, "CONOCIMIENTO_VPO")
 DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
@@ -29,7 +29,7 @@ MODELO_CHAT = "phi3"
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
-# Agrega esto al inicio de tu código original:
+
 st.markdown(
     """
     <style>
@@ -41,6 +41,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # --- DICCIONARIO MAESTRO ---
 ESTRUCTURA_FALLAS = {
     "Depaletizadora": {"foto": "depaletizadora", "componentes": {"Cabezal de agarre": ["Mecánica", "Neumática", "Electrónica"], "Mesa de descarga": ["Mecánica"], "Sistema de plano móvil": ["Mecánica"], "Sistema de elevación": ["Mecánica", "Electrónica"], "Sistema de transportación": ["Mecánica"]}},
