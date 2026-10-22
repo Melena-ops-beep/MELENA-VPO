@@ -5,3 +5,7 @@ streamlit-webrtc
 pymupdf
 chromadb
 ollama
+langchain-community
+langchain-chroma
+sentence-transformers
+torch
