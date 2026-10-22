@@ -1,6 +1,5 @@
 streamlit
 groq
-sentence-transformers
 streamlit-webrtc
 streamlit-autorefresh
 av
@@ -12,3 +11,4 @@ langchain-chroma
 torch
 opencv-python-headless
 PyMuPDF
+sentence-transformers
