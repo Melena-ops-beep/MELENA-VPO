@@ -2,11 +2,10 @@ streamlit
 groq
 sentence-transformers
 streamlit-webrtc
-pymupdf
+pypdf
 chromadb
 ollama
 langchain-community
 langchain-chroma
-sentence-transformers
 torch
-pypdf
+opencv-python-headless
