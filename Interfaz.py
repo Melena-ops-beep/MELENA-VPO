@@ -427,7 +427,20 @@ _icono_preguntar_b64 = get_base64("icono_preguntar")
 _icono_chat_b64 = get_base64("icono_preguntar")
 _icono_subir_b64 = get_base64("subir")
 
-# --- ESTILOS CSS GLOBALES ---
+def _css_icono_boton(clave_boton, icono_b64):
+    if not icono_b64: return ""
+    return f"""
+    .st-key-{clave_boton} button {{
+        background-image: url(data:image/png;base64,{icono_b64}) !important;
+        background-repeat: no-repeat !important;
+        background-position: 14px center !important;
+        background-size: 22px 22px !important;
+        text-align: left !important;
+        padding-left: 46px !important;
+    }}
+    """
+
+# --- ESTILOS CSS GLOBALES (BOTONES CON ESTILO ORIGINAL GRIS/AMARILLO) ---
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #000000 !important; }}
@@ -452,8 +465,8 @@ st.markdown(f"""
 
     .block-container {{ padding-top: 1rem !important; }}
 
-    div[data-testid="stButton"] > button[kind="secondary"], 
-    div[data-testid="stDownloadButton"] > button {{
+    /* Botones de navegación inactivos (Gris oscuro, texto blanco, icono negro/blanco) */
+    div[data-testid="stButton"] > button[kind="secondary"] {{
         background-color: #222222 !important;
         border: 2px solid #FFD700 !important;
         color: #FFFFFF !important;
@@ -468,6 +481,13 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
+    div[data-testid="stButton"] > button[kind="secondary"] *, 
+    div[data-testid="stDownloadButton"] > button * {{
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+    }}
+
+    /* Botones de navegación activos / Hover (Amarillo brillante, texto y elementos negros) */
     div[data-testid="stButton"] > button[kind="primary"] {{
         background-color: #FFD700 !important;
         border: 2px solid #FFD700 !important;
@@ -482,6 +502,31 @@ st.markdown(f"""
         box-shadow: 0 0 14px rgba(255, 215, 0, 0.9) !important;
         width: 100% !important;
     }}
+
+    div[data-testid="stButton"] > button[kind="primary"] * {{
+        color: #000000 !important;
+        fill: #000000 !important;
+        font-weight: bold !important;
+    }}
+
+    div[data-testid="stButton"] > button:hover, 
+    div[data-testid="stDownloadButton"] > button:hover {{
+        background-color: #FFD700 !important;
+        color: #000000 !important;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.8) !important;
+    }}
+
+    div[data-testid="stButton"] > button:hover *, 
+    div[data-testid="stDownloadButton"] > button:hover * {{
+        color: #000000 !important;
+        fill: #000000 !important;
+    }}
+
+    {_css_icono_boton("btn_tab_plan", _icono_generador_b64)}
+    {_css_icono_boton("btn_tab_docs", _icono_biblioteca_b64)}
+    {_css_icono_boton("btn_tab_preguntas", _icono_preguntar_b64)}
+    {_css_icono_boton("btn_tab_chat", _icono_chat_b64)}
+    {_css_icono_boton("btn_tab_subir", _icono_subir_b64)}
 
     hr {{ border-top: 2px solid #FFD700 !important; }}
     
@@ -637,6 +682,7 @@ if st.session_state.tab_activa == "plan":
                 clave_filtro_plan = f"PLAN|{linea_sel}|{area_sel}"
                 emb_consulta = obtener_embedding(consulta_texto)
                 
+                # Animación GIF integrada al consultar
                 gif_b64 = get_base64("procesando")
                 if gif_b64:
                     placeholder.markdown(f'''
@@ -722,7 +768,7 @@ elif st.session_state.tab_activa == "preguntas":
 # --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
-    st.caption("Conversa en tiempo reale con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
+    st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
 
     for mensaje in st.session_state["mensajes_chat"]:
         with st.chat_message(mensaje["role"]):
