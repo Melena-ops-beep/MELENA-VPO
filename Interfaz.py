@@ -88,28 +88,6 @@ def normalizar_texto(texto):
     s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
     return s.lower().strip()
 
-def parsear_codigo_qr(qr_raw):
-    qr_norm = normalizar_texto(qr_raw)
-    linea_detectada = None
-    area_detectada = None
-
-    if "linea 5" in qr_norm or "linea_5" in qr_norm or "l5" in qr_norm:
-        linea_detectada = "Línea 5"
-    elif "linea 6" in qr_norm or "linea_6" in qr_norm or "l6" in qr_norm:
-        linea_detectada = "Línea 6"
-    elif "5" in qr_norm and "6" not in qr_norm:
-        linea_detectada = "Línea 5"
-    elif "6" in qr_norm and "5" not in qr_norm:
-        linea_detectada = "Línea 6"
-
-    for area_real in ESTRUCTURA_FALLAS.keys():
-        area_norm = normalizar_texto(area_real)
-        if area_norm in qr_norm:
-            area_detectada = area_real
-            break
-
-    return linea_detectada, area_detectada
-
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
 def cargar_modelo_embedding():
@@ -178,17 +156,6 @@ if "mensajes_chat" not in st.session_state:
     st.session_state["mensajes_chat"] = [
         {"role": "assistant", "content": "Hola. Soy tu asistente técnico de VPO especializado en envasado de cerveza en botella de vidrio. ¿Qué avería o seguimiento deseas consultar?"}
     ]
-
-if "qr_scanned" in st.query_params:
-    qr_val = str(st.query_params.get("qr_scanned", "")).strip()
-    if qr_val:
-        linea_det, area_det = parsear_codigo_qr(qr_val)
-        if linea_det:
-            st.session_state["linea_sel"] = linea_det
-        if area_det:
-            st.session_state["area_sel"] = area_det
-        st.session_state["tab_activa"] = "docs"
-    st.query_params.clear()
 
 def encontrar_subcarpeta(ruta_base, nombre_buscado):
     if not ruta_base or not os.path.exists(ruta_base): return None
@@ -678,7 +645,6 @@ if st.session_state.tab_activa == "plan":
                 placeholder = st.empty()
                 consulta_texto = f"{tipo_falla_sel} {desc}"
                 
-                # Renderizar animación del GIF de procesamiento
                 gif_b64 = get_base64("procesando")
                 if gif_b64:
                     placeholder.markdown(f'''
@@ -743,24 +709,61 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (CON FILTRADO AVANZADO SOLICITADO) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Cómo realizo lubricación?", height=100)
-    if st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary"):
+    
+    col_f1, col_f2 = st.columns(2)
+    with col_f1: usar_linea_actual = st.checkbox(f"Buscar solo en {linea_sel}", value=True)
+    with col_f2: usar_area_actual = st.checkbox(f"Buscar solo en {area_sel}", value=True)
+
+    filtro_linea = linea_sel if usar_linea_actual else None
+    filtro_area = area_sel if usar_area_actual else None
+
+    alcance_busqueda = st.radio(
+        "Modo de filtrado de documentos:",
+        ["Todos los documentos del filtro", "Un documento en específico"],
+        horizontal=True
+    )
+
+    archivo_especifico = None
+    if alcance_busqueda == "Un documento en específico":
+        archivos_disponibles = listar_archivos_pdf_filtrados(filtro_linea, filtro_area)
+        if archivos_disponibles:
+            archivo_especifico = st.selectbox("Selecciona el documento específico:", archivos_disponibles)
+        else:
+            st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
+
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿De qué marca es la lavadora?", height=100)
+    btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
+
+    if btn_preguntar:
         if pregunta_libre.strip():
-            fragmentos = buscar_contexto(pregunta_libre, linea=linea_sel, area=area_sel, top_k=3)
-            if fragmentos:
-                st.success("Respuesta técnica basada en normativa VPO:")
-                st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la intervención adecuada en los equipos de envasado, aplique estrictamente los protocolos LOTOTO y SAM, utilice grasa grado alimentario autorizada y cumpla con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
-                st.divider()
-                st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
-                evidencias = obtener_evidencias_priorizadas(fragmentos)
-                for e in evidencias:
-                    img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                    st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
+            if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
+                st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                st.warning("No se encontraron documentos indexados para responder. Asegúrese de actualizar el índice en la barra lateral.")
+                with st.spinner("Consultando en la base de datos de documentos..."):
+                    permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
+                    fragmentos = buscar_contexto(
+                        pregunta_libre, 
+                        linea=filtro_linea, 
+                        area=filtro_area, 
+                        archivo=archivo_especifico,
+                        top_k=3, 
+                        permitir_fallback=permitir_fb
+                    )
+
+                    if not fragmentos:
+                        st.warning("No se encontró información relevante para la consulta solicitada.")
+                    else:
+                        st.success("Respuesta técnica basada en normativa VPO (LOTOTO / SAM):")
+                        st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la intervención adecuada en los equipos de envasado, aplique estrictamente los protocolos LOTOTO y SAM, utilice grasa grado alimentario autorizada y cumpla con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
+                        st.divider()
+                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales ({len(fragmentos)})</h4>", unsafe_allow_html=True)
+                        evidencias = obtener_evidencias_priorizadas(fragmentos)
+                        for e in evidencias:
+                            img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                            st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
         else:
             st.error("Por favor, escribe una pregunta.")
 
@@ -785,19 +788,68 @@ elif st.session_state.tab_activa == "chat":
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
+# --- SECCIÓN 5: SUBIR UN DOCUMENTO (CON CATEGORIZACIÓN EXACTA SOLICITADA) ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir Nuevo Documento a la Biblioteca</h3>", unsafe_allow_html=True)
-    archivo_subido = st.file_uploader("Selecciona el archivo PDF:", type=["pdf"])
-    if st.button("GUARDAR DOCUMENTO", type="primary"):
-        if archivo_subido:
-            carpeta_destino = os.path.join(DOCS_DIR, linea_sel, area_sel, "Manuales")
-            os.makedirs(carpeta_destino, exist_ok=True)
-            with open(os.path.join(carpeta_destino, archivo_subido.name), "wb") as f:
-                f.write(archivo_subido.getbuffer())
-            st.success("Archivo subido con éxito a la biblioteca.")
-        else:
-            st.error("Selecciona un archivo PDF.")
+    
+    col_up1, col_up2 = st.columns([1, 1], gap="large")
+    
+    with col_up1:
+        st.markdown("#### Categorización del Documento")
+        
+        idx_linea_def = 0 if linea_sel == "Línea 5" else 1
+        linea_dest = st.selectbox(
+            "Línea de Producción:",
+            ["Línea 5", "Línea 6"],
+            index=idx_linea_def,
+            key="upload_linea_sel"
+        )
+        
+        idx_area_def = areas_lista.index(area_sel) if area_sel in areas_lista else 0
+        area_dest = st.selectbox(
+            "Equipo / Área Operativa:",
+            areas_lista,
+            index=idx_area_def,
+            key="upload_area_sel"
+        )
+        
+        tipo_doc_dest = st.selectbox(
+            "Tipo de Documento:",
+            list(TIPO_CARPETA.keys()),
+            key="upload_tipo_doc_sel"
+        )
+        
+        subcarpeta_nombre = TIPO_CARPETA[tipo_doc_dest]
+        st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
+
+    with col_up2:
+        st.markdown("#### Carga de Archivo PDF")
+        archivo_subido = st.file_uploader("Selecciona el archivo PDF de tu computadora:", type=["pdf"], key="file_uploader_vpo")
+        
+        auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
+        
+        btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
+        
+        if btn_guardar_doc:
+            if archivo_subido is not None:
+                carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
+                os.makedirs(carpeta_destino, exist_ok=True)
+                
+                ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
+                
+                with open(ruta_completa_pdf, "wb") as f:
+                    f.write(archivo_subido.getbuffer())
+                
+                st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
+                
+                if auto_index:
+                    with st.spinner("Indexando nuevo documento en la base de datos ChromaDB..."):
+                        tot_arch, tot_chk = indexar_todos_los_documentos()
+                    st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
+                else:
+                    st.info("Recuerde presionar 'Actualizar índice de documentos' en el panel lateral cuando desee que la IA lea este archivo.")
+            else:
+                st.error("Por favor selecciona un archivo PDF antes de presionar Guardar.")
 
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("<center><p style='color: #FFD700; font-weight: bold;'>MELENA | CONFIDENCIAL - Uso exclusivo personal autorizado Grupo Modelo</p></center>", unsafe_allow_html=True)
