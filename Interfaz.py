@@ -65,7 +65,7 @@ OPCIONES_TIPO_FALLA = [
 
 # --- FUNCIONES AUXILIARES ---
 def encontrar_imagen(nombre_base):
-    extensiones = ['.gif', '.png', '.jpg', '.jpeg']
+    extensiones = ['.png', '.gif', '.jpg', '.jpeg']
     if not os.path.exists(IMG_DIR): return None
     archivos = os.listdir(IMG_DIR)
     for ext in extensiones:
@@ -300,6 +300,25 @@ def indexar_todos_los_documentos():
                             total_chunks += 1
     return total_archivos, total_chunks
 
+# Búsqueda global para el chat (sin restricciones de línea o área seleccionada)
+def buscar_contexto_global(pregunta, top_k=3):
+    coleccion = obtener_coleccion_vectorial()
+    if coleccion.count() == 0: return []
+    embedding_pregunta = obtener_embedding(pregunta)
+    resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k)
+    
+    fragmentos = []
+    if resultados and resultados.get('documents') and resultados['documents'][0]:
+        for doc, meta in zip(resultados['documents'][0], resultados['metadatas'][0]):
+            fragmentos.append({
+                "texto": doc, 
+                "archivo": meta.get('archivo'), 
+                "tipo": meta.get('tipo'), 
+                "ruta_pdf": meta.get('ruta_pdf'),
+                "pagina": meta.get('pagina')
+            })
+    return fragmentos
+
 def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=3, permitir_fallback=True):
     coleccion = obtener_coleccion_vectorial()
     if coleccion.count() == 0: return []
@@ -351,6 +370,7 @@ _icono_biblioteca_b64 = get_base64("icono_biblioteca")
 _icono_preguntar_b64 = get_base64("icono_preguntar")
 _icono_chat_b64 = get_base64("icono_preguntar")
 _icono_subir_b64 = get_base64("subir")
+_avatar_robot_b64 = get_base64("robot")
 
 def _css_icono_boton(clave_boton, icono_b64):
     if not icono_b64: return ""
@@ -719,13 +739,16 @@ Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica q
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (CONVERSACIONAL INTELIGENTE) ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (GLOBAL, FLUIDO Y CON AVATAR ROBOT.PNG) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
 
+    avatar_config = f"data:image/png;base64,{_avatar_robot_b64}" if _avatar_robot_b64 else "assistant"
+
     for mensaje in st.session_state["mensajes_chat"]:
-        with st.chat_message(mensaje["role"]):
+        avatar_usar = avatar_config if mensaje["role"] == "assistant" else None
+        with st.chat_message(mensaje["role"], avatar=avatar_usar):
             st.markdown(mensaje["content"])
 
     if prompt_chat := st.chat_input("Escribe tu seguimiento o duda técnica..."):
@@ -733,11 +756,11 @@ elif st.session_state.tab_activa == "chat":
         with st.chat_message("user"):
             st.markdown(prompt_chat)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=avatar_config):
             with st.spinner("Analizando consulta..."):
                 p_norm = normalizar_texto(prompt_chat)
                 
-                # Detectar si es una pregunta conversacional / general para responder como asistente
+                # Detectar saludos o preguntas conversacionales generales
                 es_conversacional = any(kw in p_norm for kw in [
                     "que sabes hacer", "ayuda", "hola", "quien eres", "buenos dias", 
                     "buenas tardes", "que tal", "como estas", "gracias", "saludos", "ok"
@@ -745,19 +768,19 @@ elif st.session_state.tab_activa == "chat":
 
                 if es_conversacional:
                     if "que sabes hacer" in p_norm or "ayuda" in p_norm:
-                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre las áreas operativas en tiempo real."
+                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre cualquier área o equipo de la planta."
                     elif any(saludo in p_norm for saludo in ["hola", "buenos dias", "buenas tardes", "que tal", "como estas"]):
-                        respuesta_chat = f"¡Hola! ¿Qué avería, procedimiento o seguimiento deseas consultar hoy para el área de **{area_sel}** en la **{linea_sel}**?"
+                        respuesta_chat = "¡Hola! ¿Qué avería, procedimiento o duda técnica deseas consultar hoy en la planta de envasado?"
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    # Búsqueda técnica en documentos si es una pregunta específica de operación
-                    fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
+                    # Búsqueda global en TODOS los documentos (sin respetar el filtro de la barra lateral)
+                    fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                     if fragmentos:
                         f_ref = fragmentos[0]
-                        respuesta_chat = f"Respecto a tu consulta sobre **{area_sel}** ({linea_sel}), según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
+                        respuesta_chat = f"Respecto a tu consulta, según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
                     else:
-                        respuesta_chat = f"Entendido respecto a la situación en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, revise las tolerancias mecánicas y valide con calidad antes de reanudar el flujo en la línea de envasado."
+                        respuesta_chat = f"Entendido respecto a tu comentario sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa bajo los estándares VPO en las líneas de envasado, verifique las especificaciones técnicas del equipo, aplique el protocolo de seguridad correspondiente (LOTOTO o SAM) y valide con calidad."
                 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
