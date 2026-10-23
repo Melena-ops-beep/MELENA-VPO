@@ -310,7 +310,7 @@ def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=3, perm
         condiciones.append({"archivo": archivo})
     else:
         if linea: condiciones.append({"linea": linea})
-        if area: conditions = condiciones.append({"area": area})
+        if area: condiciones.append({"area": area})
     
     filtro = {"$and": condiciones} if len(condiciones) > 1 else (condiciones[0] if len(condiciones) == 1 else None)
     resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k, where=filtro)
@@ -454,7 +454,7 @@ def _tag_logo(b64):
     return f'<img src="data:image/png;base64,{b64}" style="height:42px; margin-right:22px;">'
 
 st.markdown(f"""
-    <div class="melena-header-fijo" style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
+    <div style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
         <div style="display: flex; align-items: center;">
             {_tag_logo(_logo_ab_b64)}
             {_tag_logo(_logo_modelo_b64)}
@@ -587,15 +587,11 @@ if st.session_state.tab_activa == "plan":
                 es_oficial = len(fragmentos_pdf) > 0
                 if es_oficial:
                     st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                else:
-                    st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
-                
-                # Respuesta basada estrictamente en los fragmentos encontrados si existen
-                if es_oficial:
                     respuesta_generada = "**Respuesta extraída de manuales y documentos oficiales:**\n\n"
                     for f in fragmentos_pdf:
                         respuesta_generada += f"> **[{f['tipo']} - {f['archivo']} | Pág. {f.get('pagina', 1)}]**\n{f['texto']}\n\n"
                 else:
+                    st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                     respuesta_generada = f"""
 **Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
 **Plan de Acción VPO:** Aplique las normas de seguridad aplicables a la tarea (LOTOTO o SAM según corresponda), limpie la zona y valide con calidad antes de reanudar el flujo.
@@ -631,7 +627,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (CON CITAS Y EXTRACCIÓN REAL) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -679,16 +675,9 @@ elif st.session_state.tab_activa == "preguntas":
                         st.warning("No se encontró información relevante para la consulta solicitada en los documentos.")
                     else:
                         st.success("Respuesta extraída directamente de la documentación oficial:")
-                        
-                        # Mostrar el contenido real extraído de los fragmentos con su cita exacta
                         respuesta_texto = ""
                         for f in fragmentos:
-                            archivo_ref = f.get('archivo', 'Documento VPO')
-                            tipo_ref = f.get('tipo', 'Manual')
-                            pag_ref = f.get('pagina', 1)
-                            texto_frag = f.get('texto', '')
-                            respuesta_texto += f"> **[{tipo_ref} — {archivo_ref} | Página {pag_ref}]**\n{texto_frag}\n\n"
-                        
+                            respuesta_texto += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n{f.get('texto', '')}\n\n"
                         st.markdown(respuesta_texto)
                         
                         st.divider()
@@ -719,13 +708,19 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant"):
-            with st.spinner("Analizando historial de averías..."):
+            with st.spinner("Analizando consulta..."):
                 fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
+                
                 if fragmentos:
                     f_ref = fragmentos[0]
-                    respuesta_chat = f"Basado en el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}): {f_ref.get('texto')[:300]}..."
+                    respuesta_chat = f"Respecto a tu consulta en **{area_sel}** ({linea_sel}), según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
                 else:
-                    respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Aplique las medidas de seguridad correspondientes a la tarea y valide con calidad."
+                    p_norm = normalizar_texto(prompt_chat)
+                    if "que sabes hacer" in p_norm or "ayuda" in p_norm:
+                        respuesta_chat = "Puedo ayudarte a diagnosticar fallas mecánicas y eléctricas, consultar manuales técnicos, guiarte en procedimientos VPO (LOTOTO/SAM) y buscar evidencias visuales en las Líneas 5 y 6 de envasado."
+                    else:
+                        respuesta_chat = f"Entendido. Para dar seguimiento a tu comentario en **{area_sel}** ({linea_sel}), asegúrate de revisar las tolerancias mecánicas, aplicar los protocolos de seguridad necesarios según la tarea y validar con calidad."
+                
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
@@ -755,10 +750,10 @@ elif st.session_state.tab_activa == "subir":
                 carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
                 os.makedirs(carpeta_destino, exist_ok=True)
                 ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
-                with open(ruta_completa_pdf, "wb`") as f: # Nota: Corregido a "wb"
-                    pass
+                
                 with open(ruta_completa_pdf, "wb") as f:
                     f.write(archivo_subido.getbuffer())
+                
                 st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
                 
                 if auto_index:
