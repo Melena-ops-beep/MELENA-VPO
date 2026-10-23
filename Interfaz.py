@@ -112,7 +112,7 @@ if "area_sel" not in st.session_state or st.session_state["area_sel"] not in are
 
 if "mensajes_chat" not in st.session_state:
     st.session_state["mensajes_chat"] = [
-        {"role": "assistant", "content": "Hola. Soy tu asistente técnico de VPO especializado en envasado de cerveza en botella de vidrio. ¿Qué avería o seguimiento deseas consultar?"}
+        {"role": "assistant", "content": "Hola. Soy MELENA, tu asistente técnico de VPO especializado en envasado de cerveza en botella de vidrio. ¿Qué avería o seguimiento deseas consultar?"}
     ]
 
 def encontrar_subcarpeta(ruta_base, nombre_buscado):
@@ -627,7 +627,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (CON ANÁLISIS Y RESPUESTA EXPLICATIVA) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -682,7 +682,6 @@ Para la consulta sobre *"{pregunta_libre}"* en el área de **{area_sel}** ({line
                     else:
                         st.success("Respuesta técnica basada en la documentación oficial y normativa VPO:")
                         
-                        # Generación de respuesta explicativa y estructurada basada en los fragmentos encontrados
                         p_norm = normalizar_texto(pregunta_libre)
                         if "epp" in p_norm or "equipo de proteccion" in p_norm or "proteccion" in p_norm:
                             respuesta_analisis = f"""
@@ -720,7 +719,7 @@ Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica q
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (CONVERSACIONAL INTELIGENTE) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -736,17 +735,29 @@ elif st.session_state.tab_activa == "chat":
 
         with st.chat_message("assistant"):
             with st.spinner("Analizando consulta..."):
-                fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
+                p_norm = normalizar_texto(prompt_chat)
                 
-                if fragmentos:
-                    f_ref = fragmentos[0]
-                    respuesta_chat = f"Respecto a tu consulta en **{area_sel}** ({linea_sel}), según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
-                else:
-                    p_norm = normalizar_texto(prompt_chat)
+                # Detectar si es una pregunta conversacional / general para responder como asistente
+                es_conversacional = any(kw in p_norm for kw in [
+                    "que sabes hacer", "ayuda", "hola", "quien eres", "buenos dias", 
+                    "buenas tardes", "que tal", "como estas", "gracias", "saludos", "ok"
+                ])
+
+                if es_conversacional:
                     if "que sabes hacer" in p_norm or "ayuda" in p_norm:
-                        respuesta_chat = "Puedo ayudarte a diagnosticar fallas mecánicas y eléctricas, consultar manuales técnicos, guiarte en procedimientos VPO (LOTOTO/SAM) y buscar evidencias visuales en las Líneas 5 y 6 de envasado."
+                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre las áreas operativas en tiempo real."
+                    elif any(saludo in p_norm for saludo in ["hola", "buenos dias", "buenas tardes", "que tal", "como estas"]):
+                        respuesta_chat = f"¡Hola! ¿Qué avería, procedimiento o seguimiento deseas consultar hoy para el área de **{area_sel}** en la **{linea_sel}**?"
                     else:
-                        respuesta_chat = f"Entendido. Para dar seguimiento a tu comentario en **{area_sel}** ({linea_sel}), asegúrate de revisar las tolerancias mecánicas, aplicar los protocolos de seguridad necesarios según la tarea y validar con calidad."
+                        respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
+                else:
+                    # Búsqueda técnica en documentos si es una pregunta específica de operación
+                    fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
+                    if fragmentos:
+                        f_ref = fragmentos[0]
+                        respuesta_chat = f"Respecto a tu consulta sobre **{area_sel}** ({linea_sel}), según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
+                    else:
+                        respuesta_chat = f"Entendido respecto a la situación en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, revise las tolerancias mecánicas y valide con calidad antes de reanudar el flujo en la línea de envasado."
                 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
