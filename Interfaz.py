@@ -66,7 +66,7 @@ OPCIONES_TIPO_FALLA = [
 
 # --- FUNCIONES AUXILIARES ---
 def encontrar_imagen(nombre_base):
-    extensiones = ['.jpg', '.png', '.jpeg', '.gif']
+    extensiones = ['.gif', '.png', '.jpg', '.jpeg']
     if not os.path.exists(IMG_DIR): return None
     archivos = os.listdir(IMG_DIR)
     for ext in extensiones:
@@ -440,7 +440,7 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES (BOTONES CON ESTILO ORIGINAL GRIS/AMARILLO) ---
+# --- ESTILOS CSS GLOBALES ---
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #000000 !important; }}
@@ -465,7 +465,6 @@ st.markdown(f"""
 
     .block-container {{ padding-top: 1rem !important; }}
 
-    /* Botones de navegación inactivos (Gris oscuro, texto blanco, icono negro/blanco) */
     div[data-testid="stButton"] > button[kind="secondary"] {{
         background-color: #222222 !important;
         border: 2px solid #FFD700 !important;
@@ -487,7 +486,6 @@ st.markdown(f"""
         fill: #FFFFFF !important;
     }}
 
-    /* Botones de navegación activos / Hover (Amarillo brillante, texto y elementos negros) */
     div[data-testid="stButton"] > button[kind="primary"] {{
         background-color: #FFD700 !important;
         border: 2px solid #FFD700 !important;
@@ -679,17 +677,17 @@ if st.session_state.tab_activa == "plan":
             if desc:
                 placeholder = st.empty()
                 consulta_texto = f"{tipo_falla_sel} {desc}"
-                clave_filtro_plan = f"PLAN|{linea_sel}|{area_sel}"
-                emb_consulta = obtener_embedding(consulta_texto)
                 
-                # Animación GIF integrada al consultar
+                # Renderizar animación del GIF de procesamiento
                 gif_b64 = get_base64("procesando")
                 if gif_b64:
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
-                            <img src="data:image/gif;base64,{gif_b64}" style="width: 150px; border-radius: 50%; border: 3px solid #FFD700;">
+                            <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
                             <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
                         </div>''', unsafe_allow_html=True)
+                else:
+                    placeholder.info("Consultando manuales oficiales VPO...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
                 placeholder.empty()
@@ -701,17 +699,18 @@ if st.session_state.tab_activa == "plan":
                     st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                 
                 respuesta_generada = f"""
-**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** se asocia a un desajuste operativo o falta de lubricación en el sistema de envasado de botella de vidrio.
+**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** se asocia a un desajuste operativo, calidad del insumo o falta de lubricación en la línea de envasado de botella de vidrio.
 
 **Verificación de Componentes y Sensores:**
-1. Inspeccionar componentes mecánicos móviles en busca de fricción o desgaste prematuro.
-2. Comprobar presiones neumáticas y el estado de los puntos de lubricación centralizada.
+1. Inspeccionar componentes mecánicos móviles y guías de botellas en busca de desgaste o desalineación.
+2. Comprobar presiones neumáticas, sistemas de dosificación y el estado de los puntos de lubricación centralizada.
 
-**Plan de Acción VPO:**
-1. Detener el equipo conforme a los protocolos de seguridad industrial y bloqueo (LOTO).
-2. Limpiar la zona afectada de residuos de vidrio o humedad.
-3. Aplicar lubricante o grasa grado alimentario según las directrices del SOP.
-4. Efectuar una corrida de prueba en vacío antes de autorizar el arranque de la línea.
+**Plan de Acción VPO (Estándar LOTOTO y SAM):**
+1. Ejecutar el procedimiento de **LOTOTO** (Lockout, Tagout, Tryout) para corte y verificación de energías peligrosas.
+2. Aplicar el protocolo **SAM** (Seguridad en Ambientes de Mantenimiento / Paro Seguro) para intervención en zonas críticas.
+3. Limpiar la zona afectada de residuos de vidrio, etiquetas o humedad.
+4. Ajustar parámetros o aplicar lubricante grado alimentario según las directrices del SOP.
+5. Efectuar una corrida de prueba en vacío y validación de calidad antes de reanudar el flujo en la línea.
 """
                 st.markdown(respuesta_generada)
                 
@@ -753,7 +752,7 @@ elif st.session_state.tab_activa == "preguntas":
             fragmentos = buscar_contexto(pregunta_libre, linea=linea_sel, area=area_sel, top_k=3)
             if fragmentos:
                 st.success("Respuesta técnica basada en normativa VPO:")
-                st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la lubricación de forma adecuada en los equipos de envasado, asegúrese de utilizar grasa grado alimentario autorizada y cumplir con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la intervención adecuada en los equipos de envasado, aplique estrictamente los protocolos LOTOTO y SAM, utilice grasa grado alimentario autorizada y cumpla con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
                 st.divider()
                 st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
                 evidencias = obtener_evidencias_priorizadas(fragmentos)
@@ -782,7 +781,7 @@ elif st.session_state.tab_activa == "chat":
         with st.chat_message("assistant"):
             with st.spinner("Analizando historial de averías..."):
                 fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
-                respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, verifique las tolerancias mecánicas y ejecute la validación con calidad antes de liberar la producción de cerveza en botella de vidrio."
+                respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, recuerde aplicar siempre los protocolos **LOTOTO** y **SAM**, verifique las tolerancias mecánicas y ejecute la validación con calidad antes de liberar la producción de cerveza en botella de vidrio."
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
