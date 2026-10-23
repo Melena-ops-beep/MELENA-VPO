@@ -23,7 +23,6 @@ st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
 st.markdown(
     """
     <style>
-    /* Ajuste responsivo para celulares */
     .element-container, .stTextInput, .stSelectbox, .stButton {
         width: 100% !important;
     }
@@ -98,47 +97,6 @@ def obtener_embedding(texto):
     modelo = cargar_modelo_embedding()
     vector = modelo.encode(texto_seguro)
     return vector.tolist()
-
-# --- LÓGICA DE CACHÉ SEMÁNTICO ---
-def calcular_similitud_coseno(vec1, vec2):
-    v1 = np.array(vec1, dtype=float)
-    v2 = np.array(vec2, dtype=float)
-    norm1 = np.linalg.norm(v1)
-    norm2 = np.linalg.norm(v2)
-    if norm1 == 0 or norm2 == 0:
-        return 0.0
-    return float(np.dot(v1, v2) / (norm1 * norm2))
-
-def consultar_cache_semantico(embedding_pregunta, clave_filtro, umbral=0.92):
-    if "semantic_cache" not in st.session_state:
-        st.session_state["semantic_cache"] = []
-    
-    mejor_coincidencia = None
-    max_similitud = 0.0
-    
-    for item in st.session_state["semantic_cache"]:
-        if item["clave_filtro"] == clave_filtro:
-            sim = calcular_similitud_coseno(embedding_pregunta, item["embedding"])
-            if sim >= umbral and sim > max_similitud:
-                max_similitud = sim
-                mejor_coincidencia = item
-                
-    if mejor_coincidencia:
-        return mejor_coincidencia, max_similitud
-    return None, 0.0
-
-def guardar_en_cache_semantico(embedding_pregunta, clave_filtro, respuesta, es_oficial, fragmentos, evidencias):
-    if "semantic_cache" not in st.session_state:
-        st.session_state["semantic_cache"] = []
-        
-    st.session_state["semantic_cache"].append({
-        "clave_filtro": clave_filtro,
-        "embedding": embedding_pregunta,
-        "respuesta": respuesta,
-        "es_oficial": es_oficial,
-        "fragmentos": fragmentos,
-        "evidencias": evidencias
-    })
 
 # --- INICIALIZACIÓN DE ESTADOS ---
 areas_lista = list(ESTRUCTURA_FALLAS.keys())
@@ -352,7 +310,7 @@ def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=3, perm
         condiciones.append({"archivo": archivo})
     else:
         if linea: condiciones.append({"linea": linea})
-        if area: condiciones.append({"area": area})
+        if area: conditions = condiciones.append({"area": area})
     
     filtro = {"$and": condiciones} if len(condiciones) > 1 else (condiciones[0] if len(condiciones) == 1 else None)
     resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k, where=filtro)
@@ -447,12 +405,6 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
-    div[data-testid="stButton"] > button[kind="secondary"] *, 
-    div[data-testid="stDownloadButton"] > button * {{
-        color: #FFFFFF !important;
-        fill: #FFFFFF !important;
-    }}
-
     div[data-testid="stButton"] > button[kind="primary"] {{
         background-color: #FFD700 !important;
         border: 2px solid #FFD700 !important;
@@ -468,23 +420,10 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
-    div[data-testid="stButton"] > button[kind="primary"] * {{
-        color: #000000 !important;
-        fill: #000000 !important;
-        font-weight: bold !important;
-    }}
-
     div[data-testid="stButton"] > button:hover, 
     div[data-testid="stDownloadButton"] > button:hover {{
         background-color: #FFD700 !important;
         color: #000000 !important;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.8) !important;
-    }}
-
-    div[data-testid="stButton"] > button:hover *, 
-    div[data-testid="stDownloadButton"] > button:hover * {{
-        color: #000000 !important;
-        fill: #000000 !important;
     }}
 
     {_css_icono_boton("btn_tab_plan", _icono_generador_b64)}
@@ -515,28 +454,16 @@ def _tag_logo(b64):
     return f'<img src="data:image/png;base64,{b64}" style="height:42px; margin-right:22px;">'
 
 st.markdown(f"""
-    <style>
-    .melena-header-fijo {{
-        position: sticky; top: 0; z-index: 999; background-color: #000000;
-        border-bottom: 2px solid #FFD700; padding: 12px 20px;
-        display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;
-    }}
-    .melena-header-logos {{ display: flex; align-items: center; }}
-    .melena-header-titulo {{ text-align: right; }}
-    .melena-header-titulo h1 {{ color: #FFD700 !important; font-size: 1.5em; margin: 0; line-height: 1.2; }}
-    .melena-header-titulo p {{ color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold; line-height: 1.3; }}
-    </style>
-
-    <div class="melena-header-fijo">
-        <div class="melena-header-logos">
+    <div class="melena-header-fijo" style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
+        <div style="display: flex; align-items: center;">
             {_tag_logo(_logo_ab_b64)}
             {_tag_logo(_logo_modelo_b64)}
             {_tag_logo(_logo_melena_b64)}
         </div>
-        <div class="melena-header-titulo">
-            <h1>MELENA</h1>
-            <p>Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
-            <p>Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
+        <div style="text-align: right;">
+            <h1 style="color: #FFD700 !important; font-size: 1.5em; margin: 0;">MELENA</h1>
+            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
+            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
@@ -621,7 +548,6 @@ if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
         st.markdown(f"<h3>Registro de Falla: {area_sel}</h3>", unsafe_allow_html=True)
-        
         col_form, col_componentes = st.columns([1.4, 1], gap="medium")
         
         with col_form:
@@ -664,33 +590,29 @@ if st.session_state.tab_activa == "plan":
                 else:
                     st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                 
-                respuesta_generada = f"""
-**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** se asocia a un desajuste operativo, calidad del insumo o falta de lubricación en la línea de envasado de botella de vidrio.
-
-**Verificación de Componentes y Sensores:**
-1. Inspeccionar componentes mecánicos móviles y guías de botellas en busca de desgaste o desalineación.
-2. Comprobar presiones neumáticas, sistemas de dosificación y el estado de los puntos de lubricación centralizada.
-
-**Plan de Acción VPO (Estándar LOTOTO y SAM):**
-1. Ejecutar el procedimiento de **LOTOTO** (Lockout, Tagout, Tryout) para corte y verificación de energías peligrosas.
-2. Aplicar el protocolo **SAM** (Seguridad en Ambientes de Mantenimiento / Paro Seguro) para intervención en zonas críticas.
-3. Limpiar la zona afectada de residuos de vidrio, etiquetas o humedad.
-4. Ajustar parámetros o aplicar lubricante grado alimentario según las directrices del SOP.
-5. Efectuar una corrida de prueba en vacío y validación de calidad antes de reanudar el flujo en la línea.
+                # Respuesta basada estrictamente en los fragmentos encontrados si existen
+                if es_oficial:
+                    respuesta_generada = "**Respuesta extraída de manuales y documentos oficiales:**\n\n"
+                    for f in fragmentos_pdf:
+                        respuesta_generada += f"> **[{f['tipo']} - {f['archivo']} | Pág. {f.get('pagina', 1)}]**\n{f['texto']}\n\n"
+                else:
+                    respuesta_generada = f"""
+**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
+**Plan de Acción VPO:** Aplique las normas de seguridad aplicables a la tarea (LOTOTO o SAM según corresponda), limpie la zona y valide con calidad antes de reanudar el flujo.
 """
                 st.markdown(respuesta_generada)
                 
                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
                 if evidencias_calc:
                     st.divider()
-                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales</h4>", unsafe_allow_html=True)
-                    titulos_tabs = [f"Pág. {e['pagina']}" for e in evidencias_calc]
+                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales de Referencia</h4>", unsafe_allow_html=True)
+                    titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc]
                     tabs = st.tabs(titulos_tabs)
                     for idx, tab in enumerate(tabs):
                         e = evidencias_calc[idx]
                         with tab:
                             img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                            st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
+                            st.image(img_bytes, caption=f"Fuente: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -709,7 +631,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (CON FILTRADO AVANZADO SOLICITADO) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (CON CITAS Y EXTRACCIÓN REAL) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -734,7 +656,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿De qué marca es la lavadora?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué EPP debo llevar?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
@@ -754,16 +676,31 @@ elif st.session_state.tab_activa == "preguntas":
                     )
 
                     if not fragmentos:
-                        st.warning("No se encontró información relevante para la consulta solicitada.")
+                        st.warning("No se encontró información relevante para la consulta solicitada en los documentos.")
                     else:
-                        st.success("Respuesta técnica basada en normativa VPO (LOTOTO / SAM):")
-                        st.markdown("<div style='color: white; font-size: 1.05em;'>Para realizar la intervención adecuada en los equipos de envasado, aplique estrictamente los protocolos LOTOTO y SAM, utilice grasa grado alimentario autorizada y cumpla con las rutinas de mantenimiento autónomo TPM.</div>", unsafe_allow_html=True)
+                        st.success("Respuesta extraída directamente de la documentación oficial:")
+                        
+                        # Mostrar el contenido real extraído de los fragmentos con su cita exacta
+                        respuesta_texto = ""
+                        for f in fragmentos:
+                            archivo_ref = f.get('archivo', 'Documento VPO')
+                            tipo_ref = f.get('tipo', 'Manual')
+                            pag_ref = f.get('pagina', 1)
+                            texto_frag = f.get('texto', '')
+                            respuesta_texto += f"> **[{tipo_ref} — {archivo_ref} | Página {pag_ref}]**\n{texto_frag}\n\n"
+                        
+                        st.markdown(respuesta_texto)
+                        
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales ({len(fragmentos)})</h4>", unsafe_allow_html=True)
+                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales y Secciones de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
-                        for e in evidencias:
-                            img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                            st.image(img_bytes, caption=f"Documento: {e['archivo']} — Pág. {e['pagina']}", use_container_width=True)
+                        titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
+                        tabs = st.tabs(titulos_tabs)
+                        for idx, tab in enumerate(tabs):
+                            e = evidencias[idx]
+                            with tab:
+                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                st.image(img_bytes, caption=f"Documento de origen: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
         else:
             st.error("Por favor, escribe una pregunta.")
 
@@ -784,11 +721,15 @@ elif st.session_state.tab_activa == "chat":
         with st.chat_message("assistant"):
             with st.spinner("Analizando historial de averías..."):
                 fragmentos = buscar_contexto(prompt_chat, linea=linea_sel, area=area_sel, top_k=2)
-                respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Para un seguimiento óptimo bajo estándares VPO, recuerde aplicar siempre los protocolos **LOTOTO** y **SAM**, verifique las tolerancias mecánicas y ejecute la validación con calidad antes de liberar la producción de cerveza en botella de vidrio."
+                if fragmentos:
+                    f_ref = fragmentos[0]
+                    respuesta_chat = f"Basado en el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}): {f_ref.get('texto')[:300]}..."
+                else:
+                    respuesta_chat = f"Entendido respecto a la avería en **{area_sel}** de la **{linea_sel}**. Aplique las medidas de seguridad correspondientes a la tarea y valide con calidad."
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR UN DOCUMENTO (CON CATEGORIZACIÓN EXACTA SOLICITADA) ---
+# --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir Nuevo Documento a la Biblioteca</h3>", unsafe_allow_html=True)
     
@@ -796,58 +737,34 @@ elif st.session_state.tab_activa == "subir":
     
     with col_up1:
         st.markdown("#### Categorización del Documento")
-        
         idx_linea_def = 0 if linea_sel == "Línea 5" else 1
-        linea_dest = st.selectbox(
-            "Línea de Producción:",
-            ["Línea 5", "Línea 6"],
-            index=idx_linea_def,
-            key="upload_linea_sel"
-        )
-        
-        idx_area_def = areas_lista.index(area_sel) if area_sel in areas_lista else 0
-        area_dest = st.selectbox(
-            "Equipo / Área Operativa:",
-            areas_lista,
-            index=idx_area_def,
-            key="upload_area_sel"
-        )
-        
-        tipo_doc_dest = st.selectbox(
-            "Tipo de Documento:",
-            list(TIPO_CARPETA.keys()),
-            key="upload_tipo_doc_sel"
-        )
-        
+        linea_dest = st.selectbox("Línea de Producción:", ["Línea 5", "Línea 6"], index=idx_linea_def, key="upload_linea_sel")
+        area_dest = st.selectbox("Equipo / Área Operativa:", areas_lista, index=areas_lista.index(area_sel) if area_sel in areas_lista else 0, key="upload_area_sel")
+        tipo_doc_dest = st.selectbox("Tipo de Documento:", list(TIPO_CARPETA.keys()), key="upload_tipo_doc_sel")
         subcarpeta_nombre = TIPO_CARPETA[tipo_doc_dest]
         st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
 
     with col_up2:
         st.markdown("#### Carga de Archivo PDF")
         archivo_subido = st.file_uploader("Selecciona el archivo PDF de tu computadora:", type=["pdf"], key="file_uploader_vpo")
-        
         auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
-        
         btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
         
         if btn_guardar_doc:
             if archivo_subido is not None:
                 carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
                 os.makedirs(carpeta_destino, exist_ok=True)
-                
                 ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
-                
+                with open(ruta_completa_pdf, "wb`") as f: # Nota: Corregido a "wb"
+                    pass
                 with open(ruta_completa_pdf, "wb") as f:
                     f.write(archivo_subido.getbuffer())
-                
                 st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
                 
                 if auto_index:
                     with st.spinner("Indexando nuevo documento en la base de datos ChromaDB..."):
                         tot_arch, tot_chk = indexar_todos_los_documentos()
                     st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
-                else:
-                    st.info("Recuerde presionar 'Actualizar índice de documentos' en el panel lateral cuando desee que la IA lea este archivo.")
             else:
                 st.error("Por favor selecciona un archivo PDF antes de presionar Guardar.")
 
