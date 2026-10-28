@@ -671,7 +671,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (PLAN TÁCTICO Y ACCIONES ESPECÍFICAS) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (RESPUESTA DIRECTA Y BASADA EN EL CONTENIDO) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -696,7 +696,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Cómo realizo mantenimiento preventivo o qué EPP usar?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué grasa se ocupa en lubricación de depaletizadora?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
@@ -704,7 +704,7 @@ elif st.session_state.tab_activa == "preguntas":
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
                 st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                with st.spinner("Analizando manuales y estructurando plan de acción táctico..."):
+                with st.spinner("Analizando documentos y extrayendo respuesta..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
@@ -715,43 +715,21 @@ elif st.session_state.tab_activa == "preguntas":
                         permitir_fallback=permitir_fb
                     )
 
-                    st.success("Plan táctico estructurado con base en la documentación oficial VPO:")
-
-                    # Generación del Plan de Acción Operativo basado en la pregunta consultada
-                    respuesta_plan_consulta = f"""
-### 📋 PLAN DE ACCIÓN Y DIRECTRICES OPERATIVAS
-**Consulta Realizada:** *"{pregunta_libre}"*  
-**Contexto de Búsqueda:** {linea_sel} {f"/ {area_sel}" if usar_area_actual else ""}
-
----
-
-#### **1. Preparación y Normas de Seguridad**
-- [ ] **1.1.** Verificar los requerimientos de EPP (lentes, calzado con casquillo, protección auditiva) aplicables en el área de envasado.
-- [ ] **1.2.** Aplicar los protocolos de aislamiento de energía necesarios (**LOTOTO** / **SAM**) antes de intervenir componentes mecánicos o eléctricos.
-
-#### **2. Acciones y Pasos de Ejecución Técnica**
-- [ ] **2.1.** Seguir estrictamente las tolerancias y pautas indicadas en los manuales de mantenimiento y SOPs oficiales de la planta.
-- [ ] **2.2.** Realizar las mediciones, limpiezas o ajustes mecánicos requeridos según la desviación o consulta.
-- [ ] **2.3.** Verificar el correcto acoplamiento y estado óptimo de los componentes operacionales.
-
-#### **3. Cierre y Validación Operativa**
-- [ ] **3.1.** Retirar herramientas y asegurar el perímetro de la máquina.
-- [ ] **3.2.** Realizar pruebas operativas controladas y validación de calidad del envase antes de liberar la producción en serie.
-
----
-**📖 Fuentes y Extractos Oficiales Consultados:**
-"""
-                    if fragmentos:
-                        for f in fragmentos:
-                            respuesta_plan_consulta += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
+                    if not fragmentos:
+                        st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
                     else:
-                        respuesta_plan_consulta += "> *No se encontraron fragmentos exactos indexados; aplicando directrices generales de Excelencia Operativa VPO.*\n"
-
-                    st.markdown(respuesta_plan_consulta)
-
-                    if fragmentos:
+                        st.success("Respuesta extraída de la documentación oficial:")
+                        
+                        # Respuesta directa basada en el contenido de los documentos encontrados
+                        respuesta_directa = ""
+                        for f in fragmentos:
+                            respuesta_directa += f"**[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]:**\n"
+                            respuesta_directa += f"> {f.get('texto', '')}\n\n"
+                        
+                        st.markdown(respuesta_directa)
+                        
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales y Secciones de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
+                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
                         titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
