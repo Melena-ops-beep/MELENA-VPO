@@ -90,10 +90,9 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # Elimina los guiones de separación al final o inicio de línea, uniendo la palabra correctamente
-    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto)
-    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto_limpio)
-    # Reemplaza saltos de línea internos por espacios limpios
+    # Elimina de forma agresiva guiones seguidos de espacios, saltos de línea o tabulaciones (ej: "ro- seando", "su- perior")
+    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)\s*-\s*[\r\n\s]*([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto)
+    # Reemplaza saltos de línea internos por espacios simples para formar párrafos continuos
     texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
     # Elimina espacios dobles sobrantes
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
@@ -693,7 +692,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO 100% LIMPIO Y SIN GUIONES O ASTERISCOS) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO 100% LIMPIO Y UNIFICADO) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -747,7 +746,7 @@ elif st.session_state.tab_activa == "preguntas":
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
                             
-                            # Limpieza total de guiones y saltos de línea para lectura perfecta
+                            # Limpieza total y unificación de palabras cortadas
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             
                             st.markdown(f"""
