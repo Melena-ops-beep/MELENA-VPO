@@ -90,10 +90,9 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # Corrige únicamente palabras divididas por guion al final de línea (ej: "lubri- cante" o "su-\nperior") sin tocar URLs ni códigos
+    # Elimina guiones de corte de palabras al final/inicio de línea de forma precisa
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto)
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto_limpio)
-    # Reemplaza saltos de línea múltiples por espacios limpios
     texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
@@ -329,7 +328,7 @@ def buscar_contexto_global(pregunta, top_k=3):
             })
     return fragmentos
 
-def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=3, permitir_fallback=True):
+def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=6, permitir_fallback=True):
     coleccion = obtener_coleccion_vectorial()
     if coleccion.count() == 0: return []
     embedding_pregunta = obtener_embedding(pregunta)
@@ -692,7 +691,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (RESPUESTA EXACTA Y TEXTO LIMPIO) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (FILTRADO INTELIGENTE POR RELEVANCIA) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -725,34 +724,47 @@ elif st.session_state.tab_activa == "preguntas":
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
                 st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                with st.spinner("Analizando documentos y extrayendo respuesta..."):
+                with st.spinner("Buscando la respuesta exacta en los manuales..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
-                    # Se solicita top_k=4 con re-ordenamiento por relevancia de términos para asegurar que traiga la página correcta
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
                         linea=filtro_linea, 
                         area=filtro_area, 
                         archivo=archivo_especifico,
-                        top_k=4, 
+                        top_k=8, 
                         permitir_fallback=permitir_fb
                     )
 
                     if not fragmentos:
                         st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
                     else:
+                        # Filtrado estricto y ordenamiento por coincidencia de palabras clave de la pregunta
+                        palabras_clave_q = [normalizar_texto(w) for w in pregunta_libre.split() if len(w) > 3]
+                        
+                        fragmentos_validos = []
+                        for f in fragmentos:
+                            texto_norm = normalizar_texto(f.get('texto', ''))
+                            # Descartar fragmentos que sean solo portadas/índices genéricos si hay palabras clave
+                            es_portada = "documento:" in texto_norm and "propietario:" in texto_norm and len(texto_norm) < 300
+                            if not es_portada:
+                                score = sum(1 for w in palabras_clave_q if w in texto_norm)
+                                f['score'] = score
+                                fragmentos_validos.append(f)
+
+                        # Ordenar por puntuación de coincidencia descendente
+                        fragmentos_validos.sort(key=lambda x: x.get('score', 0), reverse=True)
+                        
+                        # Tomar los mejores 3 fragmentos realmente útiles
+                        mejores_fragmentos = fragmentos_validos[:3] if fragmentos_validos else fragmentos[:3]
+
                         st.success("Respuesta extraída de la documentación oficial:")
                         
-                        # Filtrar y priorizar fragmentos que contengan palabras clave de la pregunta (ej. "grasa", "lubricacion")
-                        palabras_clave_q = [w for w in normalizar_texto(pregunta_libre).split() if len(w) > 3]
-                        if palabras_clave_q:
-                            fragmentos.sort(key=lambda x: sum(1 for w in palabras_clave_q if w in normalizar_texto(x.get('texto', ''))), reverse=True)
-
-                        for idx_f, f in enumerate(fragmentos[:3]):
+                        for idx_f, f in enumerate(mejores_fragmentos):
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
                             
-                            # Limpieza profesional de texto (sin cortar guiones de URLs ni alterar palabras)
+                            # Limpieza total de texto
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             
                             st.markdown(f"""
@@ -768,7 +780,7 @@ elif st.session_state.tab_activa == "preguntas":
                         
                         st.divider()
                         st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen</h4>", unsafe_allow_html=True)
-                        evidencias = obtener_evidencias_priorizadas(fragmentos)
+                        evidencias = obtener_evidencias_priorizadas(mejores_fragmentos)
                         titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
                         for idx, tab in enumerate(tabs):
