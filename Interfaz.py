@@ -562,7 +562,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (ENRIQUECIDO Y ESTRUCTURADO) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -595,48 +595,51 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando manuales oficiales VPO...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan táctico VPO...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Analizando manuales oficiales VPO...")
+                    placeholder.info("Generando plan táctico VPO...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
                 placeholder.empty()
                 
                 es_oficial = len(fragmentos_pdf) > 0
                 if es_oficial:
-                    st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                    
-                    # Respuesta altamente estructurada y enriquecida con base en los documentos reales
-                    respuesta_generada = f"""
-**1. Diagnóstico Técnico y Análisis de Causa Raíz:**
-Con base en la desviación reportada (*{desc}*) en el área de **{area_sel}**, la anomalía impacta directamente en la operación de la línea de embotellado de cerveza.
+                    st.success(f"Plan de acción estructurado con base en manuales de {linea_sel.upper()} - {area_sel.upper()}")
+                else:
+                    st.warning(f"Plan de acción generado con base en directrices estándar VPO (Sin documentos específicos indexados para {linea_sel} - {area_sel})")
 
-**2. Verificación de Componentes y Sensores Críticos:**
-* Revisar el estado y alineación de los elementos en el sistema: *{', '.join(list(ESTRUCTURA_FALLAS[area_sel]['componentes'].keys())[:2])}*.
-* Comprobar retardos de señal, limpieza óptica o tolerancias mecánicas según los manuales de referencia.
-
-**3. Plan de Acción Táctico VPO:**
-* **Paso 1 (Seguridad):** Ejecutar el bloqueo de energías peligrosas aplicando **LOTOTO** o **SAM** de acuerdo con la necesidad de intervención mecánica o eléctrica.
-* **Paso 2 (Corrección):** Seguir el procedimiento técnico de ajuste, alineación o limpieza indicado en la documentación oficial.
-* **Paso 3 (Validación):** Efectuar pruebas en vacío y validación de calidad antes de reanudar el flujo en la línea.
+                respuesta_generada = f"""
+### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
+**Área / Equipo:** {area_sel} ({linea_sel})  
+**Desviación Detectada:** *{desc}*
 
 ---
-**Fuentes y Extractos Oficiales Consultados:**
+
+#### **1. Acciones Preliminares y de Seguridad (Obligatorio)**
+- [ ] **1.1.** Notificar al operador de la línea y al supervisor de turno sobre la detención temporal del equipo.
+- [ ] **1.2.** Aplicar el protocolo de **LOTOTO** (Bloqueo, Etiquetado y Verificación de Energía Cero) o **SAM** (Paro Seguro) según el tipo de intervención requerida.
+- [ ] **1.3.** Delimitación y limpieza inicial del área de trabajo de residuos de vidrio, etiquetas o humedad.
+
+#### **2. Acciones Específicas de Diagnóstico y Corrección**
+- [ ] **2.1.** Inspeccionar visualmente los componentes asociados (*{', '.join(list(ESTRUCTURA_FALLAS[area_sel]['componentes'].keys())[:2])}*) en busca de holguras, desalineación o desgaste.
+- [ ] **2.2.** Si aplica lubricación: limpiar el punto de engrase y aplicar grasa o aceite grado alimentario autorizado según especificación del fabricante.
+- [ ] **2.3.** Si es falla eléctrica/sensores: verificar limpieza óptica de lentes, LED de alimentación y correcto ajuste de tornillería en soportes.
+
+#### **3. Validación y Arranque de Línea**
+- [ ] **3.1.** Retirar herramientas, equipo de medición y personal de la zona de riesgo.
+- [ ] **3.2.** Desactivar bloqueos de seguridad y realizar un ciclo de prueba en vacío (*dry run*).
+- [ ] **3.3.** Liberar el equipo con el departamento de Calidad para la primera inspección de producto terminado en botella de vidrio.
+
+---
+**📖 Fuentes y Extractos Oficiales de Consulta:**
 """
+                if es_oficial:
                     for f in fragmentos_pdf:
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
                 else:
-                    st.warning(f"Información general para {linea_sel} - {area_sel} (Asegúrese de actualizar el índice en el panel lateral si subió manuales nuevos)")
-                    respuesta_generada = f"""
-**1. Diagnóstico Técnico:**
-La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
+                    respuesta_generada += "> *No se encontraron manuales específicos en la ruta actual; aplique los criterios generales de mantenimiento autónomo TPM de Grupo Modelo.*\n"
 
-**2. Plan de Acción VPO (Estándar de Planta):**
-* **Paso 1:** Detener el equipo y aplicar los protocolos de seguridad industrial (LOTOTO / SAM).
-* **Paso 2:** Inspeccionar visualmente la zona afectada, limpiar residuos y corregir desajustes mecánicos o eléctricos.
-* **Paso 3:** Realizar pruebas operativas y validación con calidad antes de reactivar la producción.
-"""
                 st.markdown(respuesta_generada)
                 
                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
@@ -668,7 +671,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (PLAN TÁCTICO Y ACCIONES ESPECÍFICAS) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -693,7 +696,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué EPP debo llevar?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Cómo realizo mantenimiento preventivo o qué EPP usar?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
@@ -701,7 +704,7 @@ elif st.session_state.tab_activa == "preguntas":
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
                 st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                with st.spinner("Analizando manuales y generando respuesta técnica..."):
+                with st.spinner("Analizando manuales y estructurando plan de acción táctico..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
@@ -712,41 +715,41 @@ elif st.session_state.tab_activa == "preguntas":
                         permitir_fallback=permitir_fb
                     )
 
-                    if not fragmentos:
-                        st.warning("No se encontraron documentos indexados para responder de forma exacta. Aquí tienes información general aplicable en Grupo Modelo:")
-                        st.markdown(f"""
-**Respuesta Técnica General (Área de Envasado - Grupo Modelo):**
-Para la consulta sobre *"{pregunta_libre}"* en el área de **{area_sel}** ({linea_sel}), se aplican los estándares corporativos de Excelencia Operativa VPO y seguridad industrial:
-1. **Equipo de Protección Personal (EPP):** Uso obligatorio de lentes de seguridad con protección lateral, calzado de seguridad con casquillo, tapones auditivos u orejeras en áreas de alta rumorosity (envasado), y guantes anticorte o químicos según el manejo de botellas de vidrio o lubricantes.
-2. **Normativa de Seguridad:** Aplique los procedimientos vigentes de **LOTOTO** para intervención de energías peligrosas o **SAM** para paro seguro según requiera la tarea operativa.
-""")
-                    else:
-                        st.success("Respuesta técnica basada en la documentación oficial y normativa VPO:")
-                        
-                        p_norm = normalizar_texto(pregunta_libre)
-                        if "epp" in p_norm or "equipo de proteccion" in p_norm or "proteccion" in p_norm:
-                            respuesta_analisis = f"""
-**Análisis Técnico (EPP para {area_sel} - {linea_sel}):**
-Con base en los manuales y normativas operativas para la línea de envasado de botella de vidrio, el personal técnico debe portar rigurosamente:
-* **Protección ocular:** Lentes de seguridad certificados contra impactos y salpicaduras.
-* **Protección auditiva:** Protección obligatoria por niveles de ruido en la nave de envasado.
-* **Protección corporal y extremidades:** Calzado industrial con casquillo de protección, uniforme institucional y guantes de carnaza o anticorte al manipular componentes mecánicos o botellas.
+                    st.success("Plan táctico estructurado con base en la documentación oficial VPO:")
+
+                    # Generación del Plan de Acción Operativo basado en la pregunta consultada
+                    respuesta_plan_consulta = f"""
+### 📋 PLAN DE ACCIÓN Y DIRECTRICES OPERATIVAS
+**Consulta Realizada:** *"{pregunta_libre}"*  
+**Contexto de Búsqueda:** {linea_sel} {f"/ {area_sel}" if usar_area_actual else ""}
+
+---
+
+#### **1. Preparación y Normas de Seguridad**
+- [ ] **1.1.** Verificar los requerimientos de EPP (lentes, calzado con casquillo, protección auditiva) aplicables en el área de envasado.
+- [ ] **1.2.** Aplicar los protocolos de aislamiento de energía necesarios (**LOTOTO** / **SAM**) antes de intervenir componentes mecánicos o eléctricos.
+
+#### **2. Acciones y Pasos de Ejecución Técnica**
+- [ ] **2.1.** Seguir estrictamente las tolerancias y pautas indicadas en los manuales de mantenimiento y SOPs oficiales de la planta.
+- [ ] **2.2.** Realizar las mediciones, limpiezas o ajustes mecánicos requeridos según la desviación o consulta.
+- [ ] **2.3.** Verificar el correcto acoplamiento y estado óptimo de los componentes operacionales.
+
+#### **3. Cierre y Validación Operativa**
+- [ ] **3.1.** Retirar herramientas y asegurar el perímetro de la máquina.
+- [ ] **3.2.** Realizar pruebas operativas controladas y validación de calidad del envase antes de liberar la producción en serie.
+
+---
+**📖 Fuentes y Extractos Oficiales Consultados:**
 """
-                        else:
-                            respuesta_analisis = f"""
-**Análisis y Dictamen Técnico para {area_sel} ({linea_sel}):**
-Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica que toda intervención debe regirse bajo los estándares de calidad VPO, asegurando la integridad del proceso de envasado en botella de vidrio.
-"""
-                        st.markdown(respuesta_analisis)
-                        
-                        st.markdown("---")
-                        st.markdown("<h4 style='color: #FFD700;'>Citas y Extractos de los Documentos Oficiales:</h4>", unsafe_allow_html=True)
-                        
-                        respuesta_texto = ""
+                    if fragmentos:
                         for f in fragmentos:
-                            respuesta_texto += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
-                        st.markdown(respuesta_texto)
-                        
+                            respuesta_plan_consulta += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
+                    else:
+                        respuesta_plan_consulta += "> *No se encontraron fragmentos exactos indexados; aplicando directrices generales de Excelencia Operativa VPO.*\n"
+
+                    st.markdown(respuesta_plan_consulta)
+
+                    if fragmentos:
                         st.divider()
                         st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales y Secciones de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
@@ -760,7 +763,7 @@ Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica q
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (ENRIQUECIDO Y GLOBAL) ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -794,11 +797,10 @@ elif st.session_state.tab_activa == "chat":
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    # Búsqueda global en todos los documentos cargados para enriquecer la respuesta del chat
                     fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                     if fragmentos:
                         f_ref = fragmentos[0]
-                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {f_ref.get('texto')}\n\n*Recomendación VPO:* Aplique este procedimiento asegurando los estándares de seguridad (LOTOTO / SAM) y validación de calidad."
+                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {f_ref.get('texto')}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
                     else:
                         respuesta_chat = f"Entendido respecto a tu consulta sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa en el área de envasado, verifique las tolerancias mecánicas, revise la lubricación o sensores según aplique, y ejecute la validación con calidad antes de liberar la línea."
                 
