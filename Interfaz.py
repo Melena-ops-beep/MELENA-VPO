@@ -90,7 +90,6 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # Elimina guiones de corte de palabras al final/inicio de línea de forma precisa
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto)
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto_limpio)
     texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
@@ -338,7 +337,7 @@ def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=6, perm
         condiciones.append({"archivo": archivo})
     else:
         if linea: condiciones.append({"linea": linea})
-        if area: condiciones.append({"area": area})
+        if area: conditions.append({"area": area}) if 'conditions' in locals() else condiciones.append({"area": area})
     
     filtro = {"$and": condiciones} if len(condiciones) > 1 else (condiciones[0] if len(condiciones) == 1 else None)
     resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k, where=filtro)
@@ -581,7 +580,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (INTELIGENTE Y BASADO EN LA DESVIACIÓN) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -614,55 +613,77 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan táctico VPO...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando manuales y generando plan de acción...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Generando plan táctico VPO...")
+                    placeholder.info("Analizando manuales y generando plan de acción...")
 
-                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
+                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=6)
                 placeholder.empty()
                 
-                es_oficial = len(fragmentos_pdf) > 0
-                if es_oficial:
-                    st.success(f"Plan de acción estructurado con base en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                else:
-                    st.warning(f"Plan de acción generado con base en directrices estándar VPO (Sin documentos específicos indexados para {linea_sel} - {area_sel})")
+                # Filtrar fragmentos por relevancia con la falla escrita
+                palabras_clave_desc = [normalizar_texto(w) for w in desc.split() if len(w) > 3]
+                fragmentos_validos = []
+                for f in fragmentos_pdf:
+                    texto_norm = normalizar_texto(f.get('texto', ''))
+                    es_portada = "documento:" in texto_norm and "propietario:" in texto_norm and len(texto_norm) < 300
+                    if not es_portada:
+                        score = sum(1 for w in palabras_clave_desc if w in texto_norm)
+                        f['score'] = score
+                        fragmentos_validos.append(f)
 
+                fragmentos_validos.sort(key=lambda x: x.get('score', 0), reverse=True)
+                mejores_fragmentos = fragmentos_validos[:3] if fragmentos_validos else fragmentos_pdf[:3]
+
+                es_oficial = len(mejores_fragmentos) > 0
+                if es_oficial:
+                    st.success(f"Plan de acción generado con base en manuales oficiales de {linea_sel.upper()} - {area_sel.upper()}")
+                else:
+                    st.warning(f"Generado con base en directrices estándar VPO (Sin coincidencias exactas para {linea_sel} - {area_sel})")
+
+                # Estructura del plan adaptada dinámicamente a la falla ingresada
                 respuesta_generada = f"""
 ### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
 **Área / Equipo:** {area_sel} ({linea_sel})  
-**Desviación Detectada:** *{desc}*
+**Tipo de Desviación:** {tipo_falla_sel}  
+**Descripción:** *{desc}*
 
 ---
 
-#### **1. Acciones Preliminares y de Seguridad (Obligatorio)**
-- [ ] **1.1.** Notificar al operador de la línea y al supervisor de turno sobre la detención temporal del equipo.
-- [ ] **1.2.** Aplicar el protocolo de **LOTOTO** (Bloqueo, Etiquetado y Verificación de Energía Cero) o **SAM** (Paro Seguro) según el tipo de intervención requerida.
-- [ ] **1.3.** Delimitación y limpieza inicial del área de trabajo de residuos de vidrio, etiquetas o humedad.
+#### **1. Protocolo de Seguridad Inicial**
+- [ ] **1.1.** Informar al operador y detener temporalmente el equipo de forma controlada.
+- [ ] **1.2.** Aplicar normas corporativas de bloqueo de energías (**LOTOTO** / **SAM**) según aplique la intervención.
 
-#### **2. Acciones Específicas de Diagnóstico y Corrección**
-- [ ] **2.1.** Inspeccionar visualmente los componentes asociados (*{', '.join(list(ESTRUCTURA_FALLAS[area_sel]['componentes'].keys())[:2])}*) en busca de holguras, desalineación o desgaste.
-- [ ] **2.2.** Si aplica lubricación: limpiar el punto de engrase y aplicar grasa o aceite grado alimentario autorizado según especificación del fabricante.
-- [ ] **2.3.** Si es falla eléctrica/sensores: verificar limpieza óptica de lentes, LED de alimentación y correcto ajuste de tornillería en soportes.
-
-#### **3. Validación y Arranque de Línea**
-- [ ] **3.1.** Retirar herramientas, equipo de medición y personal de la zona de riesgo.
-- [ ] **3.2.** Desactivar bloqueos de seguridad y realizar un ciclo de prueba en vacío (*dry run*).
-- [ ] **3.3.** Liberar el equipo con el departamento de Calidad para la primera inspección de producto terminado en botella de vidrio.
-
----
-**📖 Fuentes y Extractos Oficiales de Consulta:**
+#### **2. Acciones Específicas Extraídas de Manuales SOP / PDR**
 """
                 if es_oficial:
-                    for f in fragmentos_pdf:
+                    for f in mejores_fragmentos:
+                        texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                        tipo_doc = f.get('tipo', 'Manual')
+                        archivo_doc = f.get('archivo', 'Documento')
+                        pag = f.get('pagina', 1)
+                        respuesta_generada += f"- [ ] **Ref:** *[{tipo_doc} - {archivo_doc} | Pág. {pag}]* -> {texto_limpio}\n"
+                else:
+                    respuesta_generada += "- [ ] Revisar componentes asociados, verificar cableado/sensores y validar tolerancias mecánicas según manual.\n"
+
+                respuesta_generada += """
+#### **3. Pruebas y Validación Operativa**
+- [ ] **3.1.** Retirar herramientas y despejar la zona de riesgo.
+- [ ] **3.2.** Realizar pruebas operativas en vacío y verificar con el departamento de Calidad la liberación de producto.
+
+---
+**📖 Extractos Oficiales de Consulta:**
+"""
+                if es_oficial:
+                    for f in mejores_fragmentos:
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
                 else:
-                    respuesta_generada += "> *No se encontraron manuales específicos en la ruta actual; aplique los criterios generales de mantenimiento autónomo TPM de Grupo Modelo.*\n"
+                    respuesta_generada += "> *No se encontraron fragmentos específicos; aplique el mantenimiento autónomo estándar.*\n"
 
                 st.markdown(respuesta_generada)
                 
-                evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                evidencias_calc = obtener_evidencias_priorizadas(mejores_fragmentos) if mejores_fragmentos else []
                 if evidencias_calc:
                     st.divider()
                     st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales de Referencia</h4>", unsafe_allow_html=True)
@@ -691,7 +712,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (FILTRADO INTELIGENTE POR RELEVANCIA) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -738,23 +759,18 @@ elif st.session_state.tab_activa == "preguntas":
                     if not fragmentos:
                         st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
                     else:
-                        # Filtrado estricto y ordenamiento por coincidencia de palabras clave de la pregunta
                         palabras_clave_q = [normalizar_texto(w) for w in pregunta_libre.split() if len(w) > 3]
                         
                         fragmentos_validos = []
                         for f in fragmentos:
                             texto_norm = normalizar_texto(f.get('texto', ''))
-                            # Descartar fragmentos que sean solo portadas/índices genéricos si hay palabras clave
                             es_portada = "documento:" in texto_norm and "propietario:" in texto_norm and len(texto_norm) < 300
                             if not es_portada:
                                 score = sum(1 for w in palabras_clave_q if w in texto_norm)
                                 f['score'] = score
                                 fragmentos_validos.append(f)
 
-                        # Ordenar por puntuación de coincidencia descendente
                         fragmentos_validos.sort(key=lambda x: x.get('score', 0), reverse=True)
-                        
-                        # Tomar los mejores 3 fragmentos realmente útiles
                         mejores_fragmentos = fragmentos_validos[:3] if fragmentos_validos else fragmentos[:3]
 
                         st.success("Respuesta extraída de la documentación oficial:")
@@ -763,8 +779,6 @@ elif st.session_state.tab_activa == "preguntas":
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
-                            
-                            # Limpieza total de texto
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             
                             st.markdown(f"""
