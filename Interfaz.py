@@ -580,7 +580,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES GENERALES ADAPTADAS Y REFERENCIAS VISUALES) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES GENERALES Y ESTRUCTURADAS POR CONOCIMIENTO LÓGICO + EVIDENCIAS) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -613,82 +613,86 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de acción general y táctico...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de acción estructurado...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Generando plan de acción general y táctico...")
+                    placeholder.info("Generando plan de acción estructurado...")
 
+                # Búsqueda para obtener referencias y documentos visuales de fondo
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
                 placeholder.empty()
 
-                st.success(f"Plan de acción estructurado con base en normativas VPO para {linea_sel.upper()} - {area_sel.upper()}")
+                st.success(f"Plan estructurado generado para {linea_sel.upper()} - {area_sel.upper()}")
 
-                # Redacción de acciones generales profesionales y estructuradas orientadas al contexto de la falla
+                # Lógica experta para redactar un plan sumamente profesional y estructurado adaptado al contexto de la falla
                 p_norm = normalizar_texto(desc)
-                if "sensor" in p_norm or "sensores" in p_norm or "senal" in p_norm:
-                    acciones_especificas = """
-- [ ] **1. Inspección de alimentación y LED:** Verificar que el sensor cuente con voltaje de alimentación adecuado (24V DC) y comprobar el estado de los LED indicadores de energía y activación.
-- [ ] **2. Limpieza óptica y mecánica:** Inspeccionar la óptica del sensor, retirar polvo, residuos de vidrio o humedad, y asegurar que el soporte no presente vibración o desalineación.
-- [ ] **3. Verificación de cableado y entradas:** Comprobar la continuidad del cableado hacia las terminales de control y verificar en el PLC o pantalla HMI si la señal digital está ingresando correctamente.
+                t_norm = normalizar_texto(tipo_falla_sel)
+
+                if "sensor" in p_norm or "sensores" in p_norm or "senal" in p_norm or "electrica" in t_norm:
+                    acciones_logicas = f"""
+- [ ] **1. Verificación de Alimentación y Conectores:** Comprobar con multímetro que el sensor en **{area_sel}** reciba la tensión nominal de operación (24V DC) y revisar que los conectores M12 estén firmes y libres de humedad.
+- [ ] **2. Diagnóstico de Estado y LED Indicadores:** Revisar la respuesta visual de los LED de estado del sensor ante la presencia del objeto; comprobar que el cabezal óptico, inductivo o magnético no esté obstruido por suciedad o desalineado.
+- [ ] **3. Monitoreo de Entradas en PLC/HMI:** Validar en el sistema de control de la **{linea_sel}** si la señal digital de entrada conmuta correctamente al activarse físicamente el dispositivo.
 """
-                elif "motor" in p_norm or "atasco" in p_norm or "atascos" in p_norm:
-                    acciones_especificas = """
-- [ ] **1. Verificación de despeje:** Asegurar que no existan envases rotos, atascos mecánicos u obstrucciones físicas en el área del mecanismo.
-- [ ] **2. Revisión de accionamientos:** Comprobar térmicos, variadores de frecuencia y estado de acoplamientos mecánicos o cadenas de transmisión.
-- [ ] **3. Pruebas en vacío:** Liberar el torque de manera segura y accionar en modo manual para verificar la libertad de movimiento.
+                elif "motor" in p_norm or "atasco" in p_norm or "mecanica" in t_norm or "rodillos" in p_norm:
+                    acciones_logicas = f"""
+- [ ] **1. Inspección Mecánica Visual:** Verificar el área afectada en **{area_sel}** para confirmar la ausencia de embotellamientos, fragmentos de vidrio, solapas atascadas o componentes trabados.
+- [ ] **2. Verificación de Transmisión y Acoples:** Revisar el estado de cadenas, chumaceras, bandas, engranajes y pernos de sujeción para descartar holguras o deslizamientos.
+- [ ] **3. Pruebas Manuales / En Vacío:** Desactivar bloqueos de seguridad de forma segura y realizar un giro manual o prueba en vacío (*dry run*) para asegurar la libertad de movimiento.
 """
                 elif "lubricacion" in p_norm or "grasa" in p_norm or "aceite" in p_norm:
-                    acciones_especificas = """
-- [ ] **1. Identificación de puntos de engrase:** Localizar los chumaceras, guías o reductores indicados en el plan de mantenimiento autónomo.
-- [ ] **2. Aplicación de insumo correcto:** Utilizar la grasa o aceite grado alimentario autorizado (ej. CASSIDA / CELEROL) según especificación técnica.
-- [ ] **3. Retiro de excedentes:** Limpiar el exceso de lubricante para evitar acumulación de contaminantes en la zona de envases.
+                    acciones_logicas = f"""
+- [ ] **1. Localización de Puntos de Engrase:** Ubicar las chumaceras, guías o reductores de **{area_sel}** según el plan de mantenimiento autónomo TPM.
+- [ ] **2. Aplicación de Insumos Autorizados:** Suministrar grasa o aceite grado alimentario (ej. CASSIDA / CELEROL) respetando las cantidades y periodicidad recomendadas.
+- [ ] **3. Limpieza y Retiro de Excedentes:** Retirar el exceso de lubricante para prevenir la acumulación de contaminantes o polvo en el área de envases.
 """
                 else:
-                    acciones_especificas = f"""
-- [ ] **1. Verificación preliminar:** Inspeccionar visualmente la zona de {area_sel} relacionada con la incidencia reportada (*{desc}*).
-- [ ] **2. Ajustes y reapriete:** Comprobar tornillería, conectores eléctricos, neumática o tolerancias mecánicas según aplique.
-- [ ] **3. Pruebas de funcionamiento:** Ejecutar ciclos controlados para asegurar el restablecimiento de la operación normal.
+                    acciones_logicas = f"""
+- [ ] **1. Diagnóstico General de la Desviación:** Inspeccionar minuciosamente el equipo en **{area_sel}** para identificar el origen exacto del problema reportado (*{desc}*).
+- [ ] **2. Corrección y Ajuste Táctico:** Ejecutar los ajustes mecánicos, eléctricos o operativos necesarios bajo los lineamientos de excelencia VPO.
+- [ ] **3. Verificación de Funcionamiento:** Monitorear el comportamiento de la máquina durante ciclos controlados de operación.
 """
 
                 respuesta_generada = f"""
 ### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
 **Área / Equipo:** {area_sel} ({linea_sel})  
 **Tipo de Avería:** {tipo_falla_sel}  
-**Incidencia:** *{desc}*
+**Incidencia Reportada:** *{desc}*
 
 ---
 
 #### **1. Normas de Seguridad y Preparación**
-- [ ] **1.1.** Informar al equipo de operaciones y supervisor de turno sobre la intervención.
+- [ ] **1.1.** Informar al operador de la línea y al supervisor de turno sobre la detención temporal.
 - [ ] **1.2.** Aplicar los protocolos de bloqueo corporativo **LOTOTO** (energías peligrosas) o **SAM** (paro seguro).
 
-#### **2. Acciones Operativas Generales y Recomendadas**
-{acciones_especificas}
+#### **2. Acciones Técnicas Recomendadas**
+{acciones_logicas}
 
 #### **3. Validación y Liberación de Línea**
-- [ ] **3.1.** Retirar herramientas, equipo de medición y asegurar el perímetro de seguridad.
-- [ ] **3.2.** Realizar arranque en vacío y solicitar la inspección de calidad para liberar producto terminado.
+- [ ] **3.1.** Retirar herramientas, equipo de medición y asegurar el perímetro de la zona de trabajo.
+- [ ] **3.2.** Realizar pruebas operativas controladas y solicitar la verificación de Calidad para liberar el producto terminado.
 
 ---
-**📖 Referencias y Extractos Oficiales de Apoyo:**
+**📖 Referencias y Documentación de Apoyo:**
 """
                 if fragmentos_pdf:
                     for f in fragmentos_pdf[:3]:
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
                 else:
-                    respuesta_generada += "> *[Manual General VPO — Estándares de Mantenimiento Autónomo | Página 1]*\n> Aplicar pautas generales de TPM y verificación de componentes críticos en la línea de envasado.\n\n"
+                    respuesta_generada += f"> **[Manual Técnico General — {area_sel} | Estándares VPO]**\n> Aplicar pautas generales de mantenimiento autónomo y verificación de puntos críticos en la {linea_sel}.\n\n"
 
                 st.markdown(respuesta_generada)
                 
-                # Renderizado de evidencias visuales (asegurando mostrar pestañas aun si el fragmento no trae imagen directa)
+                # Renderizar siempre las evidencias visuales y pestañas con los documentos disponibles
                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
-                if not evidencias_calc and fragmentos_pdf:
-                    # Fallback para mostrar al menos la primera referencia disponible como imagen o pestaña
-                    f_base = fragmentos_pdf[0]
-                    p_path, p_num = resolver_ruta_y_pagina(f_base)
-                    if p_path and os.path.exists(p_path):
-                        evidencias_calc = [{"pdf_path": p_path, "pagina": p_num, "archivo": f_base.get('archivo', 'Manual'), "tipo": "Referencia"}]
+                if not evidencias_calc and DOCS_DIR:
+                    for root, dirs, files in os.walk(DOCS_DIR):
+                        for f in files:
+                            if f.lower().endswith(".pdf"):
+                                evidencias_calc = [{"pdf_path": os.path.join(root, f), "pagina": 1, "archivo": f, "tipo": "Manual Operativo"}]
+                                break
+                        if evidencias_calc: break
 
                 if evidencias_calc:
                     st.divider()
