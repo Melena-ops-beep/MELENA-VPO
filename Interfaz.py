@@ -96,6 +96,14 @@ def limpiar_texto_pdf(texto):
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
 
+def formatear_accion_operativa(texto):
+    if not texto: return ""
+    texto_limpio = limpiar_texto_pdf(texto)
+    # Capitaliza la primera letra para que se lea como una instrucción formal
+    if len(texto_limpio) > 0:
+        texto_limpio = texto_limpio[0].upper() + texto_limpio[1:]
+    return texto_limpio
+
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
 def cargar_modelo_embedding():
@@ -337,7 +345,7 @@ def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=6, perm
         condiciones.append({"archivo": archivo})
     else:
         if linea: condiciones.append({"linea": linea})
-        if area: conditions.append({"area": area}) if 'conditions' in locals() else condiciones.append({"area": area})
+        if area: condiciones.append({"area": area})
     
     filtro = {"$and": condiciones} if len(condiciones) > 1 else (condiciones[0] if len(condiciones) == 1 else None)
     resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k, where=filtro)
@@ -580,7 +588,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (INTELIGENTE Y BASADO EN LA DESVIACIÓN) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES BIEN REDACTADAS Y FORMATEADAS) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -613,15 +621,14 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando manuales y generando plan de acción...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan táctico VPO...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Analizando manuales y generando plan de acción...")
+                    placeholder.info("Generando plan táctico VPO...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=6)
                 placeholder.empty()
                 
-                # Filtrar fragmentos por relevancia con la falla escrita
                 palabras_clave_desc = [normalizar_texto(w) for w in desc.split() if len(w) > 3]
                 fragmentos_validos = []
                 for f in fragmentos_pdf:
@@ -637,49 +644,47 @@ if st.session_state.tab_activa == "plan":
 
                 es_oficial = len(mejores_fragmentos) > 0
                 if es_oficial:
-                    st.success(f"Plan de acción generado con base en manuales oficiales de {linea_sel.upper()} - {area_sel.upper()}")
+                    st.success(f"Plan de acción estructurado con base en manuales de {linea_sel.upper()} - {area_sel.upper()}")
                 else:
-                    st.warning(f"Generado con base en directrices estándar VPO (Sin coincidencias exactas para {linea_sel} - {area_sel})")
+                    st.warning(f"Plan de acción generado con base en directrices estándar VPO (Sin documentos específicos)")
 
-                # Estructura del plan adaptada dinámicamente a la falla ingresada
+                # Estructura limpia y profesional de acciones operativas
                 respuesta_generada = f"""
 ### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
 **Área / Equipo:** {area_sel} ({linea_sel})  
-**Tipo de Desviación:** {tipo_falla_sel}  
-**Descripción:** *{desc}*
+**Desviación Detectada:** *{desc}*
 
 ---
 
-#### **1. Protocolo de Seguridad Inicial**
-- [ ] **1.1.** Informar al operador y detener temporalmente el equipo de forma controlada.
-- [ ] **1.2.** Aplicar normas corporativas de bloqueo de energías (**LOTOTO** / **SAM**) según aplique la intervención.
+#### **1. Acciones Preliminares y de Seguridad**
+- [ ] **1.1.** Notificar al operador de la línea y al supervisor de turno sobre la detención temporal del equipo.
+- [ ] **1.2.** Aplicar el protocolo de **LOTOTO** (Bloqueo, Etiquetado y Verificación de Energía Cero) o **SAM** (Paro Seguro).
 
-#### **2. Acciones Específicas Extraídas de Manuales SOP / PDR**
+#### **2. Acciones Específicas de Diagnóstico y Corrección**
 """
                 if es_oficial:
-                    for f in mejores_fragmentos:
-                        texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                    for idx_a, f in enumerate(mejores_fragmentos, 1):
+                        accion_limpia = formatear_accion_operativa(f.get('texto', ''))
                         tipo_doc = f.get('tipo', 'Manual')
                         archivo_doc = f.get('archivo', 'Documento')
                         pag = f.get('pagina', 1)
-                        respuesta_generada += f"- [ ] **Ref:** *[{tipo_doc} - {archivo_doc} | Pág. {pag}]* -> {texto_limpio}\n"
+                        respuesta_generada += f"- [ ] **Acción {idx_a}:** {accion_limpia} *(Ref: {tipo_doc} - {archivo_doc} | Pág. {pag})*\n"
                 else:
-                    respuesta_generada += "- [ ] Revisar componentes asociados, verificar cableado/sensores y validar tolerancias mecánicas según manual.\n"
+                    st.warning("No se encontraron manuales específicos; aplicando directrices generales de mantenimiento.")
+                    respuesta_generada += "- [ ] **Acción 1:** Inspeccionar visualmente el estado del componente y verificar conexiones de sensores o alimentaciones eléctricas.\n"
 
                 respuesta_generada += """
-#### **3. Pruebas y Validación Operativa**
-- [ ] **3.1.** Retirar herramientas y despejar la zona de riesgo.
-- [ ] **3.2.** Realizar pruebas operativas en vacío y verificar con el departamento de Calidad la liberación de producto.
+#### **3. Validación y Arranque de Línea**
+- [ ] **3.1.** Retirar herramientas y despejar la zona de intervención.
+- [ ] **3.2.** Realizar una prueba operativa controlada y solicitar la liberación del equipo con el departamento de Calidad.
 
 ---
-**📖 Extractos Oficiales de Consulta:**
+**📖 Extractos y Referencias Oficiales:**
 """
                 if es_oficial:
                     for f in mejores_fragmentos:
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
-                else:
-                    respuesta_generada += "> *No se encontraron fragmentos específicos; aplique el mantenimiento autónomo estándar.*\n"
 
                 st.markdown(respuesta_generada)
                 
