@@ -90,28 +90,14 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # 1. Une palabras cortadas por guion con saltos de línea o espacios (ej: "lubri- cante" o "su-\nperior" -> "lubricante", "superior")
+    # Elimina los guiones de separación al final o inicio de línea, uniendo la palabra correctamente
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto)
     texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto_limpio)
-    # 2. Reemplaza saltos de línea internos por espacios simples para formar párrafos limpios
+    # Reemplaza saltos de línea internos por espacios limpios
     texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
-    # 3. Elimina espacios dobles sobrantes
+    # Elimina espacios dobles sobrantes
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
-
-def resaltar_palabras_clave(texto):
-    # Lista de términos técnicos clave en la planta a resaltar limpiamente como palabras completas
-    palabras_clave = [
-        "grasa", "aceite", "celerol", "cassida", "eps", "7007", "7203", 
-        "lototo", "sam", "chumacera", "chumaceras", "rodamiento", "rodamientos", 
-        "cadena", "cadenas", "carril", "carriles", "brocha", "desengrasante", "limpieza"
-    ]
-    texto_resaltado = texto
-    for palabra in palabras_clave:
-        # Usa límites de palabra (\b) para evitar romper partes internas de otras palabras
-        patron = re.compile(r'\b(' + re.escape(palabra) + r')\b', re.IGNORECASE)
-        texto_resaltado = patron.sub(r'**\1**', texto_resaltado)
-    return texto_resaltado
 
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
@@ -672,8 +658,7 @@ if st.session_state.tab_activa == "plan":
                 if es_oficial:
                     for f in fragmentos_pdf:
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
-                        texto_resaltado = resaltar_palabras_clave(texto_limpio)
-                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_resaltado}\n\n"
+                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
                 else:
                     respuesta_generada += "> *No se encontraron manuales específicos en la ruta actual; aplique los criterios generales de mantenimiento autónomo TPM de Grupo Modelo.*\n"
 
@@ -708,7 +693,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO LIMPIO, SIN GUIONES Y CLAVES DESTACADAS) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO 100% LIMPIO Y SIN GUIONES O ASTERISCOS) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -762,9 +747,8 @@ elif st.session_state.tab_activa == "preguntas":
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
                             
-                            # Limpieza profunda de guiones y formato limpio con palabras clave completas en negritas
+                            # Limpieza total de guiones y saltos de línea para lectura perfecta
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
-                            texto_resaltado = resaltar_palabras_clave(texto_limpio)
                             
                             st.markdown(f"""
                             <div class="tarjeta-manual">
@@ -772,7 +756,7 @@ elif st.session_state.tab_activa == "preguntas":
                                     📄 [{tipo_doc}] {archivo_doc} — Pág. {pagina_doc}
                                 </p>
                                 <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.6; margin: 0;">
-                                    {texto_resaltado}
+                                    {texto_limpio}
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -828,8 +812,7 @@ elif st.session_state.tab_activa == "chat":
                     if fragmentos:
                         f_ref = fragmentos[0]
                         texto_limpio = limpiar_texto_pdf(f_ref.get('texto', ''))
-                        texto_resaltado = resaltar_palabras_clave(texto_limpio)
-                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {texto_resaltado}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
+                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {texto_limpio}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
                     else:
                         respuesta_chat = f"Entendido respecto a tu consulta sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa en el área de envasado, verifique las tolerancias mecánicas, revise la lubricación o sensores según aplique, y ejecute la validación con calidad antes de liberar la línea."
                 
