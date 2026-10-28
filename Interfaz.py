@@ -562,7 +562,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (ESTRUCTURADO Y CON CONSULTA DE FUENTES) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (ENRIQUECIDO Y ESTRUCTURADO) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -595,10 +595,10 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Consultando manuales oficiales VPO...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando manuales oficiales VPO...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Consultando manuales oficiales VPO...")
+                    placeholder.info("Analizando manuales oficiales VPO...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=3)
                 placeholder.empty()
@@ -607,19 +607,19 @@ if st.session_state.tab_activa == "plan":
                 if es_oficial:
                     st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
                     
-                    # Generación estructurada del plan de acción táctico basado en la documentación
+                    # Respuesta altamente estructurada y enriquecida con base en los documentos reales
                     respuesta_generada = f"""
-**1. Diagnóstico y Análisis Técnico:**
-Derivado de la desviación reportada (*{desc}*) en el área de **{area_sel}**, el análisis se fundamenta en las directrices de los manuales oficiales de la línea.
+**1. Diagnóstico Técnico y Análisis de Causa Raíz:**
+Con base en la desviación reportada (*{desc}*) en el área de **{area_sel}**, la anomalía impacta directamente en la operación de la línea de embotellado de cerveza.
 
-**2. Verificación de Componentes Críticos:**
-* Revisar los sistemas de control, cableado y señales asociadas a los componentes de **{area_sel}**.
-* Comprobar estatus de sensores y actuadores descritos en la documentación de referencia.
+**2. Verificación de Componentes y Sensores Críticos:**
+* Revisar el estado y alineación de los elementos en el sistema: *{', '.join(list(ESTRUCTURA_FALLAS[area_sel]['componentes'].keys())[:2])}*.
+* Comprobar retardos de señal, limpieza óptica o tolerancias mecánicas según los manuales de referencia.
 
-**3. Plan de Acción y Ejecución VPO:**
-* **Paso 1:** Aplicar los protocolos de seguridad industrial (LOTOTO o SAM según la naturaleza de la intervención).
-* **Paso 2:** Seguir las instrucciones de ajuste, calibración o corrección indicadas en los manuales oficiales.
-* **Paso 3:** Ejecutar pruebas en vacío y validación de calidad antes de liberar la línea al proceso de envasado.
+**3. Plan de Acción Táctico VPO:**
+* **Paso 1 (Seguridad):** Ejecutar el bloqueo de energías peligrosas aplicando **LOTOTO** o **SAM** de acuerdo con la necesidad de intervención mecánica o eléctrica.
+* **Paso 2 (Corrección):** Seguir el procedimiento técnico de ajuste, alineación o limpieza indicado en la documentación oficial.
+* **Paso 3 (Validación):** Efectuar pruebas en vacío y validación de calidad antes de reanudar el flujo en la línea.
 
 ---
 **Fuentes y Extractos Oficiales Consultados:**
@@ -627,15 +627,15 @@ Derivado de la desviación reportada (*{desc}*) en el área de **{area_sel}**, e
                     for f in fragmentos_pdf:
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
                 else:
-                    st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
+                    st.warning(f"Información general para {linea_sel} - {area_sel} (Asegúrese de actualizar el índice en el panel lateral si subió manuales nuevos)")
                     respuesta_generada = f"""
 **1. Diagnóstico Técnico:**
 La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
 
-**2. Plan de Acción VPO (Estándar General):**
-* **Paso 1:** Detener el equipo y aplicar las normativas de seguridad (LOTOTO / SAM).
-* **Paso 2:** Inspeccionar visualmente la zona afectada y corregir desajustes mecánicos o eléctricos.
-* **Paso 3:** Realizar pruebas operativas antes de reactivar la producción.
+**2. Plan de Acción VPO (Estándar de Planta):**
+* **Paso 1:** Detener el equipo y aplicar los protocolos de seguridad industrial (LOTOTO / SAM).
+* **Paso 2:** Inspeccionar visualmente la zona afectada, limpiar residuos y corregir desajustes mecánicos o eléctricos.
+* **Paso 3:** Realizar pruebas operativas y validación con calidad antes de reactivar la producción.
 """
                 st.markdown(respuesta_generada)
                 
@@ -760,7 +760,7 @@ Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica q
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (ENRIQUECIDO Y GLOBAL) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -778,7 +778,7 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("Analizando consulta..."):
+            with st.spinner("Analizando consulta técnica..."):
                 p_norm = normalizar_texto(prompt_chat)
                 
                 es_conversacional = any(kw in p_norm for kw in [
@@ -788,18 +788,19 @@ elif st.session_state.tab_activa == "chat":
 
                 if es_conversacional:
                     if "que sabes hacer" in p_norm or "ayuda" in p_norm:
-                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre cualquier área o equipo de la planta."
+                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción detallados ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre cualquier área o equipo de la planta."
                     elif any(saludo in p_norm for saludo in ["hola", "buenos dias", "buenas tardes", "que tal", "como estas"]):
                         respuesta_chat = "¡Hola! ¿Qué avería, procedimiento o duda técnica deseas consultar hoy en la planta de envasado?"
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
+                    # Búsqueda global en todos los documentos cargados para enriquecer la respuesta del chat
                     fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                     if fragmentos:
                         f_ref = fragmentos[0]
-                        respuesta_chat = f"Respecto a tu consulta, según el documento **{f_ref.get('archivo')}** (Página {f_ref.get('pagina', 1)}):\n\n> {f_ref.get('texto')}"
+                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {f_ref.get('texto')}\n\n*Recomendación VPO:* Aplique este procedimiento asegurando los estándares de seguridad (LOTOTO / SAM) y validación de calidad."
                     else:
-                        respuesta_chat = f"Entendido respecto a tu comentario sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa bajo los estándares VPO en las líneas de envasado, verifique las especificaciones técnicas del equipo, aplique el protocolo de seguridad correspondiente (LOTOTO o SAM) y valide con calidad."
+                        respuesta_chat = f"Entendido respecto a tu consulta sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa en el área de envasado, verifique las tolerancias mecánicas, revise la lubricación o sensores según aplique, y ejecute la validación con calidad antes de liberar la línea."
                 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
