@@ -90,11 +90,11 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # Elimina de forma agresiva guiones seguidos de espacios, saltos de línea o tabulaciones (ej: "ro- seando", "su- perior")
-    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)\s*-\s*[\r\n\s]*([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto)
-    # Reemplaza saltos de línea internos por espacios simples para formar párrafos continuos
+    # Corrige únicamente palabras divididas por guion al final de línea (ej: "lubri- cante" o "su-\nperior") sin tocar URLs ni códigos
+    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto)
+    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]{2,})', r'\1\2', texto_limpio)
+    # Reemplaza saltos de línea múltiples por espacios limpios
     texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
-    # Elimina espacios dobles sobrantes
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
 
@@ -692,7 +692,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO 100% LIMPIO Y UNIFICADO) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (RESPUESTA EXACTA Y TEXTO LIMPIO) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -727,12 +727,13 @@ elif st.session_state.tab_activa == "preguntas":
             else:
                 with st.spinner("Analizando documentos y extrayendo respuesta..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
+                    # Se solicita top_k=4 con re-ordenamiento por relevancia de términos para asegurar que traiga la página correcta
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
                         linea=filtro_linea, 
                         area=filtro_area, 
                         archivo=archivo_especifico,
-                        top_k=3, 
+                        top_k=4, 
                         permitir_fallback=permitir_fb
                     )
 
@@ -741,12 +742,17 @@ elif st.session_state.tab_activa == "preguntas":
                     else:
                         st.success("Respuesta extraída de la documentación oficial:")
                         
-                        for idx_f, f in enumerate(fragmentos):
+                        # Filtrar y priorizar fragmentos que contengan palabras clave de la pregunta (ej. "grasa", "lubricacion")
+                        palabras_clave_q = [w for w in normalizar_texto(pregunta_libre).split() if len(w) > 3]
+                        if palabras_clave_q:
+                            fragmentos.sort(key=lambda x: sum(1 for w in palabras_clave_q if w in normalizar_texto(x.get('texto', ''))), reverse=True)
+
+                        for idx_f, f in enumerate(fragmentos[:3]):
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
                             
-                            # Limpieza total y unificación de palabras cortadas
+                            # Limpieza profesional de texto (sin cortar guiones de URLs ni alterar palabras)
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             
                             st.markdown(f"""
@@ -761,7 +767,7 @@ elif st.session_state.tab_activa == "preguntas":
                             """, unsafe_allow_html=True)
                         
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
+                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
                         titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
