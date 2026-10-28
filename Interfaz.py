@@ -300,7 +300,6 @@ def indexar_todos_los_documentos():
                             total_chunks += 1
     return total_archivos, total_chunks
 
-# Búsqueda global para el chat (sin restricciones de línea o área seleccionada)
 def buscar_contexto_global(pregunta, top_k=3):
     coleccion = obtener_coleccion_vectorial()
     if coleccion.count() == 0: return []
@@ -563,7 +562,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (ESTRUCTURADO Y CON CONSULTA DE FUENTES) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -607,14 +606,36 @@ if st.session_state.tab_activa == "plan":
                 es_oficial = len(fragmentos_pdf) > 0
                 if es_oficial:
                     st.success(f"Información sustentada en manuales de {linea_sel.upper()} - {area_sel.upper()}")
-                    respuesta_generada = "**Respuesta extraída de manuales y documentos oficiales:**\n\n"
+                    
+                    # Generación estructurada del plan de acción táctico basado en la documentación
+                    respuesta_generada = f"""
+**1. Diagnóstico y Análisis Técnico:**
+Derivado de la desviación reportada (*{desc}*) en el área de **{area_sel}**, el análisis se fundamenta en las directrices de los manuales oficiales de la línea.
+
+**2. Verificación de Componentes Críticos:**
+* Revisar los sistemas de control, cableado y señales asociadas a los componentes de **{area_sel}**.
+* Comprobar estatus de sensores y actuadores descritos en la documentación de referencia.
+
+**3. Plan de Acción y Ejecución VPO:**
+* **Paso 1:** Aplicar los protocolos de seguridad industrial (LOTOTO o SAM según la naturaleza de la intervención).
+* **Paso 2:** Seguir las instrucciones de ajuste, calibración o corrección indicadas en los manuales oficiales.
+* **Paso 3:** Ejecutar pruebas en vacío y validación de calidad antes de liberar la línea al proceso de envasado.
+
+---
+**Fuentes y Extractos Oficiales Consultados:**
+"""
                     for f in fragmentos_pdf:
-                        respuesta_generada += f"> **[{f['tipo']} - {f['archivo']} | Pág. {f.get('pagina', 1)}]**\n{f['texto']}\n\n"
+                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
                 else:
                     st.warning(f"Respuesta basada en conocimiento general (Sin documentos cargados para {linea_sel} - {area_sel})")
                     respuesta_generada = f"""
-**Diagnóstico Técnico:** La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
-**Plan de Acción VPO:** Aplique las normas de seguridad aplicables a la tarea, limpie la zona y valide con calidad antes de reanudar el flujo.
+**1. Diagnóstico Técnico:**
+La falla reportada (*{desc}*) en el área de **{area_sel}** requiere inspección especializada en los sistemas de envasado de botella de vidrio.
+
+**2. Plan de Acción VPO (Estándar General):**
+* **Paso 1:** Detener el equipo y aplicar las normativas de seguridad (LOTOTO / SAM).
+* **Paso 2:** Inspeccionar visualmente la zona afectada y corregir desajustes mecánicos o eléctricos.
+* **Paso 3:** Realizar pruebas operativas antes de reactivar la producción.
 """
                 st.markdown(respuesta_generada)
                 
@@ -739,7 +760,7 @@ Derivado de la consulta realizada, la normativa interna de Grupo Modelo indica q
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (GLOBAL, FLUIDO Y CON AVATAR ROBOT.PNG) ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -760,7 +781,6 @@ elif st.session_state.tab_activa == "chat":
             with st.spinner("Analizando consulta..."):
                 p_norm = normalizar_texto(prompt_chat)
                 
-                # Detectar saludos o preguntas conversacionales generales
                 es_conversacional = any(kw in p_norm for kw in [
                     "que sabes hacer", "ayuda", "hola", "quien eres", "buenos dias", 
                     "buenas tardes", "que tal", "como estas", "gracias", "saludos", "ok"
@@ -774,7 +794,6 @@ elif st.session_state.tab_activa == "chat":
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    # Búsqueda global en TODOS los documentos (sin respetar el filtro de la barra lateral)
                     fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                     if fragmentos:
                         f_ref = fragmentos[0]
