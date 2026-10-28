@@ -580,7 +580,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES GENERALES Y ESTRUCTURADAS POR CONOCIMIENTO LÓGICO + EVIDENCIAS) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (PASOS DETALLADOS Y SECUENCIALES DE RESOLUCIÓN) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -613,64 +613,67 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de acción estructurado...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de resolución paso a paso...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Generando plan de acción estructurado...")
+                    placeholder.info("Generando plan de resolución paso a paso...")
 
-                # Búsqueda para obtener referencias y documentos visuales de fondo
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
                 placeholder.empty()
 
-                st.success(f"Plan estructurado generado para {linea_sel.upper()} - {area_sel.upper()}")
+                st.success(f"Plan secuencial generado para {linea_sel.upper()} - {area_sel.upper()}")
 
-                # Lógica experta para redactar un plan sumamente profesional y estructurado adaptado al contexto de la falla
+                # Generación de una serie detallada de pasos lógicos adaptados al tipo de falla
                 p_norm = normalizar_texto(desc)
                 t_norm = normalizar_texto(tipo_falla_sel)
 
                 if "sensor" in p_norm or "sensores" in p_norm or "senal" in p_norm or "electrica" in t_norm:
-                    acciones_logicas = f"""
-- [ ] **1. Verificación de Alimentación y Conectores:** Comprobar con multímetro que el sensor en **{area_sel}** reciba la tensión nominal de operación (24V DC) y revisar que los conectores M12 estén firmes y libres de humedad.
-- [ ] **2. Diagnóstico de Estado y LED Indicadores:** Revisar la respuesta visual de los LED de estado del sensor ante la presencia del objeto; comprobar que el cabezal óptico, inductivo o magnético no esté obstruido por suciedad o desalineado.
-- [ ] **3. Monitoreo de Entradas en PLC/HMI:** Validar en el sistema de control de la **{linea_sel}** si la señal digital de entrada conmuta correctamente al activarse físicamente el dispositivo.
+                    pasos_resolucion = f"""
+- [ ] **Paso 1: Diagnóstico visual y de seguridad.** Detener la máquina de forma segura, asegurar el área e inspeccionar físicamente el sensor en **{area_sel}** para descartar daños en la carcasa o el empaque.
+- [ ] **Paso 2: Comprobación de alimentación eléctrica.** Utilizar un multímetro para medir el voltaje en los bornes del sensor y verificar la presencia de los 24V DC estables de alimentación.
+- [ ] **Paso 3: Verificación de LED indicadores y óptica.** Activar el componente manualmente o pasar un objeto de prueba frente al lente; confirmar que el LED emisor/receptor responda adecuadamente y limpiar la suciedad o humedad acumulada en la óptica.
+- [ ] **Paso 4: Revisión de cableado y conectores.** Comprobar la firmeza y continuidad del conector M12, buscando cables trozados, terminales flojas o falsos contactos en las canaletas.
+- [ ] **Paso 5: Monitoreo en interfaz HMI / PLC.** Acceder al sistema de control de la **{linea_sel}** para comprobar si el bit o dirección de entrada digital cambia de estado al activarse el sensor.
+- [ ] **Paso 6: Pruebas y validación final.** Restablecer las protecciones, ejecutar un ciclo de prueba controlado y validar la correcta operación con el área de Calidad.
 """
                 elif "motor" in p_norm or "atasco" in p_norm or "mecanica" in t_norm or "rodillos" in p_norm:
-                    acciones_logicas = f"""
-- [ ] **1. Inspección Mecánica Visual:** Verificar el área afectada en **{area_sel}** para confirmar la ausencia de embotellamientos, fragmentos de vidrio, solapas atascadas o componentes trabados.
-- [ ] **2. Verificación de Transmisión y Acoples:** Revisar el estado de cadenas, chumaceras, bandas, engranajes y pernos de sujeción para descartar holguras o deslizamientos.
-- [ ] **3. Pruebas Manuales / En Vacío:** Desactivar bloqueos de seguridad de forma segura y realizar un giro manual o prueba en vacío (*dry run*) para asegurar la libertad de movimiento.
+                    pasos_resolucion = f"""
+- [ ] **Paso 1: Aplicación de paro seguro y LOTOTO.** Realizar el bloqueo de energías peligrosas y asegurar que el equipo en **{area_sel}** se encuentre totalmente desenergizado.
+- [ ] **Paso 2: Inspección de obstrucciones y atascos.** Retirar manualmente los envases trabados, fragmentos de vidrio, etiquetas o cualquier elemento extraño que bloquee el mecanismo.
+- [ ] **Paso 3: Revisión de elementos de transmisión.** Comprobar el estado de tensión y alineación de cadenas, bandas, chumaceras y engranajes, verificando que no existan piezas desgastadas.
+- [ ] **Paso 4: Verificación de tornillería y soportes.** Inspeccionar los pernos de fijación del motor, reductores y soportes estructurales para descartar holguras causadas por vibración.
+- [ ] **Paso 5: Pruebas de giro en vacío.** Liberar los frenos mecánicos de forma segura y realizar un movimiento manual para comprobar la suavidad y libertad de desplazamiento.
+- [ ] **Paso 6: Arranque controlado y liberación.** Retirar herramientas, desenergizar bloqueos, arrancar la línea en vacío y solicitar la supervisión de Calidad.
 """
                 elif "lubricacion" in p_norm or "grasa" in p_norm or "aceite" in p_norm:
-                    acciones_logicas = f"""
-- [ ] **1. Localización de Puntos de Engrase:** Ubicar las chumaceras, guías o reductores de **{area_sel}** según el plan de mantenimiento autónomo TPM.
-- [ ] **2. Aplicación de Insumos Autorizados:** Suministrar grasa o aceite grado alimentario (ej. CASSIDA / CELEROL) respetando las cantidades y periodicidad recomendadas.
-- [ ] **3. Limpieza y Retiro de Excedentes:** Retirar el exceso de lubricante para prevenir la acumulación de contaminantes o polvo en el área de envases.
+                    pasos_resolucion = f"""
+- [ ] **Paso 1: Preparación y seguridad operativa.** Verificar los requerimientos de EPP y asegurar las condiciones seguras para intervenir los puntos de lubricación en **{area_sel}**.
+- [ ] **Paso 2: Limpieza previa de boquillas y chumaceras.** Remover el polvo, grasa vieja y contaminantes acumulados alrededor de las graseras o puntos de aplicación para evitar que ingresen al sistema.
+- [ ] **Paso 3: Selección del lubricante correcto.** Comprobar que el insumo a utilizar corresponda exactamente al grado alimentario autorizado (ej. CASSIDA / CELEROL) según manual.
+- [ ] **Paso 4: Aplicación dosificada.** Suministrar la cantidad recomendada de grasa o aceite mediante equipo de aplicación adecuado (pistola o brocha).
+- [ ] **Paso 5: Limpieza de excedentes.** Retirar el lubricante sobrante para evitar escurrimientos o acumulación indeseada en el entorno de los envases.
+- [ ] **Paso 6: Registro y verificación.** Comprobar el libre movimiento de los componentes engrasados y registrar el mantenimiento ejecutado.
 """
                 else:
-                    acciones_logicas = f"""
-- [ ] **1. Diagnóstico General de la Desviación:** Inspeccionar minuciosamente el equipo en **{area_sel}** para identificar el origen exacto del problema reportado (*{desc}*).
-- [ ] **2. Corrección y Ajuste Táctico:** Ejecutar los ajustes mecánicos, eléctricos o operativos necesarios bajo los lineamientos de excelencia VPO.
-- [ ] **3. Verificación de Funcionamiento:** Monitorear el comportamiento de la máquina durante ciclos controlados de operación.
+                    pasos_resolucion = f"""
+- [ ] **Paso 1: Aseguramiento del área.** Notificar al personal operativo, detener el equipo y aplicar las normas de seguridad corporativas (**LOTOTO** / **SAM**).
+- [ ] **Paso 2: Análisis de la desviación.** Inspeccionar detalladamente el sistema de **{area_sel}** para identificar la causa raíz de la incidencia (*{desc}*).
+- [ ] **Paso 3: Ejecución de correcciones técnicas.** Realizar los ajustes, reaprietes, reposición de piezas o solución de parámetros que correspondan.
+- [ ] **Paso 4: Verificación de integridad.** Comprobar que no queden herramientas ni personal en zonas de riesgo operativo.
+- [ ] **Paso 5: Pruebas de arranque.** Poner en marcha la máquina en modo manual o en vacío para certificar la solución del problema.
+- [ ] **Paso 6: Liberación con Calidad.** Autorizar el reinicio de la producción en serie tras la validación del producto terminado.
 """
 
                 respuesta_generada = f"""
-### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
+### 🛠️ PLAN DE ACCIÓN PASO A PASO (VPO)
 **Área / Equipo:** {area_sel} ({linea_sel})  
-**Tipo de Avería:** {tipo_falla_sel}  
-**Incidencia Reportada:** *{desc}*
+**Tipo de Falla:** {tipo_falla_sel}  
+**Incidencia:** *{desc}*
 
 ---
 
-#### **1. Normas de Seguridad y Preparación**
-- [ ] **1.1.** Informar al operador de la línea y al supervisor de turno sobre la detención temporal.
-- [ ] **1.2.** Aplicar los protocolos de bloqueo corporativo **LOTOTO** (energías peligrosas) o **SAM** (paro seguro).
-
-#### **2. Acciones Técnicas Recomendadas**
-{acciones_logicas}
-
-#### **3. Validación y Liberación de Línea**
-- [ ] **3.1.** Retirar herramientas, equipo de medición y asegurar el perímetro de la zona de trabajo.
-- [ ] **3.2.** Realizar pruebas operativas controladas y solicitar la verificación de Calidad para liberar el producto terminado.
+#### **Secuencia de Resolución Operativa:**
+{pasos_resolucion}
 
 ---
 **📖 Referencias y Documentación de Apoyo:**
@@ -680,7 +683,7 @@ if st.session_state.tab_activa == "plan":
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
                 else:
-                    respuesta_generada += f"> **[Manual Técnico General — {area_sel} | Estándares VPO]**\n> Aplicar pautas generales de mantenimiento autónomo y verificación de puntos críticos en la {linea_sel}.\n\n"
+                    respuesta_generada += f"> **[Manual Operativo General — {area_sel} | Estándares VPO]**\n> Seguir la guía de mantenimiento preventivo y solución de anomalías para la {linea_sel}.\n\n"
 
                 st.markdown(respuesta_generada)
                 
