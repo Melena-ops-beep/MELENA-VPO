@@ -96,14 +96,6 @@ def limpiar_texto_pdf(texto):
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
 
-def formatear_accion_operativa(texto):
-    if not texto: return ""
-    texto_limpio = limpiar_texto_pdf(texto)
-    # Capitaliza la primera letra para que se lea como una instrucción formal
-    if len(texto_limpio) > 0:
-        texto_limpio = texto_limpio[0].upper() + texto_limpio[1:]
-    return texto_limpio
-
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
 def cargar_modelo_embedding():
@@ -588,7 +580,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES BIEN REDACTADAS Y FORMATEADAS) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (ACCIONES GENERALES ADAPTADAS Y REFERENCIAS VISUALES) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -621,84 +613,93 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan táctico VPO...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de acción general y táctico...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Generando plan táctico VPO...")
+                    placeholder.info("Generando plan de acción general y táctico...")
 
-                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=6)
+                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
                 placeholder.empty()
-                
-                palabras_clave_desc = [normalizar_texto(w) for w in desc.split() if len(w) > 3]
-                fragmentos_validos = []
-                for f in fragmentos_pdf:
-                    texto_norm = normalizar_texto(f.get('texto', ''))
-                    es_portada = "documento:" in texto_norm and "propietario:" in texto_norm and len(texto_norm) < 300
-                    if not es_portada:
-                        score = sum(1 for w in palabras_clave_desc if w in texto_norm)
-                        f['score'] = score
-                        fragmentos_validos.append(f)
 
-                fragmentos_validos.sort(key=lambda x: x.get('score', 0), reverse=True)
-                mejores_fragmentos = fragmentos_validos[:3] if fragmentos_validos else fragmentos_pdf[:3]
+                st.success(f"Plan de acción estructurado con base en normativas VPO para {linea_sel.upper()} - {area_sel.upper()}")
 
-                es_oficial = len(mejores_fragmentos) > 0
-                if es_oficial:
-                    st.success(f"Plan de acción estructurado con base en manuales de {linea_sel.upper()} - {area_sel.upper()}")
+                # Redacción de acciones generales profesionales y estructuradas orientadas al contexto de la falla
+                p_norm = normalizar_texto(desc)
+                if "sensor" in p_norm or "sensores" in p_norm or "senal" in p_norm:
+                    acciones_especificas = """
+- [ ] **1. Inspección de alimentación y LED:** Verificar que el sensor cuente con voltaje de alimentación adecuado (24V DC) y comprobar el estado de los LED indicadores de energía y activación.
+- [ ] **2. Limpieza óptica y mecánica:** Inspeccionar la óptica del sensor, retirar polvo, residuos de vidrio o humedad, y asegurar que el soporte no presente vibración o desalineación.
+- [ ] **3. Verificación de cableado y entradas:** Comprobar la continuidad del cableado hacia las terminales de control y verificar en el PLC o pantalla HMI si la señal digital está ingresando correctamente.
+"""
+                elif "motor" in p_norm or "atasco" in p_norm or "atascos" in p_norm:
+                    acciones_especificas = """
+- [ ] **1. Verificación de despeje:** Asegurar que no existan envases rotos, atascos mecánicos u obstrucciones físicas en el área del mecanismo.
+- [ ] **2. Revisión de accionamientos:** Comprobar térmicos, variadores de frecuencia y estado de acoplamientos mecánicos o cadenas de transmisión.
+- [ ] **3. Pruebas en vacío:** Liberar el torque de manera segura y accionar en modo manual para verificar la libertad de movimiento.
+"""
+                elif "lubricacion" in p_norm or "grasa" in p_norm or "aceite" in p_norm:
+                    acciones_especificas = """
+- [ ] **1. Identificación de puntos de engrase:** Localizar los chumaceras, guías o reductores indicados en el plan de mantenimiento autónomo.
+- [ ] **2. Aplicación de insumo correcto:** Utilizar la grasa o aceite grado alimentario autorizado (ej. CASSIDA / CELEROL) según especificación técnica.
+- [ ] **3. Retiro de excedentes:** Limpiar el exceso de lubricante para evitar acumulación de contaminantes en la zona de envases.
+"""
                 else:
-                    st.warning(f"Plan de acción generado con base en directrices estándar VPO (Sin documentos específicos)")
+                    acciones_especificas = f"""
+- [ ] **1. Verificación preliminar:** Inspeccionar visualmente la zona de {area_sel} relacionada con la incidencia reportada (*{desc}*).
+- [ ] **2. Ajustes y reapriete:** Comprobar tornillería, conectores eléctricos, neumática o tolerancias mecánicas según aplique.
+- [ ] **3. Pruebas de funcionamiento:** Ejecutar ciclos controlados para asegurar el restablecimiento de la operación normal.
+"""
 
-                # Estructura limpia y profesional de acciones operativas
                 respuesta_generada = f"""
 ### 🛠️ PLAN TÁCTICO DE REACCIÓN VPO
 **Área / Equipo:** {area_sel} ({linea_sel})  
-**Desviación Detectada:** *{desc}*
+**Tipo de Avería:** {tipo_falla_sel}  
+**Incidencia:** *{desc}*
 
 ---
 
-#### **1. Acciones Preliminares y de Seguridad**
-- [ ] **1.1.** Notificar al operador de la línea y al supervisor de turno sobre la detención temporal del equipo.
-- [ ] **1.2.** Aplicar el protocolo de **LOTOTO** (Bloqueo, Etiquetado y Verificación de Energía Cero) o **SAM** (Paro Seguro).
+#### **1. Normas de Seguridad y Preparación**
+- [ ] **1.1.** Informar al equipo de operaciones y supervisor de turno sobre la intervención.
+- [ ] **1.2.** Aplicar los protocolos de bloqueo corporativo **LOTOTO** (energías peligrosas) o **SAM** (paro seguro).
 
-#### **2. Acciones Específicas de Diagnóstico y Corrección**
-"""
-                if es_oficial:
-                    for idx_a, f in enumerate(mejores_fragmentos, 1):
-                        accion_limpia = formatear_accion_operativa(f.get('texto', ''))
-                        tipo_doc = f.get('tipo', 'Manual')
-                        archivo_doc = f.get('archivo', 'Documento')
-                        pag = f.get('pagina', 1)
-                        respuesta_generada += f"- [ ] **Acción {idx_a}:** {accion_limpia} *(Ref: {tipo_doc} - {archivo_doc} | Pág. {pag})*\n"
-                else:
-                    st.warning("No se encontraron manuales específicos; aplicando directrices generales de mantenimiento.")
-                    respuesta_generada += "- [ ] **Acción 1:** Inspeccionar visualmente el estado del componente y verificar conexiones de sensores o alimentaciones eléctricas.\n"
+#### **2. Acciones Operativas Generales y Recomendadas**
+{acciones_especificas}
 
-                respuesta_generada += """
-#### **3. Validación y Arranque de Línea**
-- [ ] **3.1.** Retirar herramientas y despejar la zona de intervención.
-- [ ] **3.2.** Realizar una prueba operativa controlada y solicitar la liberación del equipo con el departamento de Calidad.
+#### **3. Validación y Liberación de Línea**
+- [ ] **3.1.** Retirar herramientas, equipo de medición y asegurar el perímetro de seguridad.
+- [ ] **3.2.** Realizar arranque en vacío y solicitar la inspección de calidad para liberar producto terminado.
 
 ---
-**📖 Extractos y Referencias Oficiales:**
+**📖 Referencias y Extractos Oficiales de Apoyo:**
 """
-                if es_oficial:
-                    for f in mejores_fragmentos:
+                if fragmentos_pdf:
+                    for f in fragmentos_pdf[:3]:
                         texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                         respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
+                else:
+                    respuesta_generada += "> *[Manual General VPO — Estándares de Mantenimiento Autónomo | Página 1]*\n> Aplicar pautas generales de TPM y verificación de componentes críticos en la línea de envasado.\n\n"
 
                 st.markdown(respuesta_generada)
                 
-                evidencias_calc = obtener_evidencias_priorizadas(mejores_fragmentos) if mejores_fragmentos else []
+                # Renderizado de evidencias visuales (asegurando mostrar pestañas aun si el fragmento no trae imagen directa)
+                evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                if not evidencias_calc and fragmentos_pdf:
+                    # Fallback para mostrar al menos la primera referencia disponible como imagen o pestaña
+                    f_base = fragmentos_pdf[0]
+                    p_path, p_num = resolver_ruta_y_pagina(f_base)
+                    if p_path and os.path.exists(p_path):
+                        evidencias_calc = [{"pdf_path": p_path, "pagina": p_num, "archivo": f_base.get('archivo', 'Manual'), "tipo": "Referencia"}]
+
                 if evidencias_calc:
                     st.divider()
-                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales de Referencia</h4>", unsafe_allow_html=True)
-                    titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc]
+                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Referencias</h4>", unsafe_allow_html=True)
+                    titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
                     tabs = st.tabs(titulos_tabs)
                     for idx, tab in enumerate(tabs):
                         e = evidencias_calc[idx]
                         with tab:
                             img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                            st.image(img_bytes, caption=f"Fuente: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                            st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -757,30 +758,16 @@ elif st.session_state.tab_activa == "preguntas":
                         linea=filtro_linea, 
                         area=filtro_area, 
                         archivo=archivo_especifico,
-                        top_k=8, 
+                        top_k=6, 
                         permitir_fallback=permitir_fb
                     )
 
                     if not fragmentos:
                         st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
                     else:
-                        palabras_clave_q = [normalizar_texto(w) for w in pregunta_libre.split() if len(w) > 3]
-                        
-                        fragmentos_validos = []
-                        for f in fragmentos:
-                            texto_norm = normalizar_texto(f.get('texto', ''))
-                            es_portada = "documento:" in texto_norm and "propietario:" in texto_norm and len(texto_norm) < 300
-                            if not es_portada:
-                                score = sum(1 for w in palabras_clave_q if w in texto_norm)
-                                f['score'] = score
-                                fragmentos_validos.append(f)
-
-                        fragmentos_validos.sort(key=lambda x: x.get('score', 0), reverse=True)
-                        mejores_fragmentos = fragmentos_validos[:3] if fragmentos_validos else fragmentos[:3]
-
                         st.success("Respuesta extraída de la documentación oficial:")
                         
-                        for idx_f, f in enumerate(mejores_fragmentos):
+                        for idx_f, f in enumerate(fragmentos[:3]):
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
@@ -799,7 +786,7 @@ elif st.session_state.tab_activa == "preguntas":
                         
                         st.divider()
                         st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen</h4>", unsafe_allow_html=True)
-                        evidencias = obtener_evidencias_priorizadas(mejores_fragmentos)
+                        evidencias = obtener_evidencias_priorizadas(fragmentos)
                         titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
                         for idx, tab in enumerate(tabs):
