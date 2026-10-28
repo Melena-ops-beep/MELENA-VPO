@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import os
 import base64
+import re
 import unicodedata
 import numpy as np
 from pypdf import PdfReader
@@ -86,6 +87,28 @@ def normalizar_texto(texto):
     s = unicodedata.normalize('NFD', str(texto))
     s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
     return s.lower().strip()
+
+def limpiar_texto_pdf(texto):
+    if not texto: return ""
+    # Une las palabras cortadas por guion al final de línea (ej: "lubri- cante" -> "lubricante")
+    texto_limpio = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', texto)
+    texto_limpio = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', texto_limpio)
+    # Reemplaza saltos de línea múltiples por espacios limpios
+    texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
+    return texto_limpio.strip()
+
+def resaltar_palabras_clave(texto):
+    # Resalta en negritas términos comunes de mantenimiento, lubricación y seguridad
+    palabras_clave = [
+        "grasa", "aceite", "celerol", "cassida", "eps", "7007", "7203", 
+        "lototo", "sam", "chumacera", "rodamiento", "cadena", "carril", 
+        "brocha", "desengrasante", "limpieza", "seguridad", "presion"
+    ]
+    texto_resaltado = texto
+    for palabra in palabras_clave:
+        patron = re.compile(re.escape(palabra), re.IGNORECASE)
+        texto_resaltado = patron.sub(f"**{palabra.upper()}**", texto_resaltado)
+    return texto_resaltado
 
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
 @st.cache_resource
@@ -461,7 +484,6 @@ st.markdown(f"""
         margin-top: 5px;
     }}
 
-    /* Estilo limpio para tarjetas de manuales */
     .tarjeta-manual {{
         background-color: #111B2B;
         border-left: 4px solid #FFD700;
@@ -646,7 +668,9 @@ if st.session_state.tab_activa == "plan":
 """
                 if es_oficial:
                     for f in fragmentos_pdf:
-                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {f.get('texto', '')}\n\n"
+                        texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                        texto_resaltado = resaltar_palabras_clave(texto_limpio)
+                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_resaltado}\n\n"
                 else:
                     respuesta_generada += "> *No se encontraron manuales específicos en la ruta actual; aplique los criterios generales de mantenimiento autónomo TPM de Grupo Modelo.*\n"
 
@@ -681,7 +705,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (FORMATO LEGIBLE Y LIMPIO) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO LIMPIO Y PALABRAS CLAVE EN NEGRITAS) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -730,12 +754,14 @@ elif st.session_state.tab_activa == "preguntas":
                     else:
                         st.success("Respuesta extraída de la documentación oficial:")
                         
-                        # Renderizado limpio en tarjetas legibles (sin bloques grises pesados)
                         for idx_f, f in enumerate(fragmentos):
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
-                            texto_doc = f.get('texto', '')
+                            
+                            # Limpieza de guiones de corte y resaltado de palabras clave en negritas
+                            texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                            texto_resaltado = resaltar_palabras_clave(texto_limpio)
                             
                             st.markdown(f"""
                             <div class="tarjeta-manual">
@@ -743,7 +769,7 @@ elif st.session_state.tab_activa == "preguntas":
                                     📄 [{tipo_doc}] {archivo_doc} — Pág. {pagina_doc}
                                 </p>
                                 <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.5; margin: 0;">
-                                    {texto_doc}
+                                    {texto_resaltado}
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -798,7 +824,9 @@ elif st.session_state.tab_activa == "chat":
                     fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                     if fragmentos:
                         f_ref = fragmentos[0]
-                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {f_ref.get('texto')}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
+                        texto_limpio = limpiar_texto_pdf(f_ref.get('texto', ''))
+                        texto_resaltado = resaltar_palabras_clave(texto_limpio)
+                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {texto_resaltado}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
                     else:
                         respuesta_chat = f"Entendido respecto a tu consulta sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa en el área de envasado, verifique las tolerancias mecánicas, revise la lubricación o sensores según aplique, y ejecute la validación con calidad antes de liberar la línea."
                 
