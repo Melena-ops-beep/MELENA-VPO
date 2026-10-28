@@ -90,24 +90,27 @@ def normalizar_texto(texto):
 
 def limpiar_texto_pdf(texto):
     if not texto: return ""
-    # Une las palabras cortadas por guion al final de línea (ej: "lubri- cante" -> "lubricante")
-    texto_limpio = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', texto)
-    texto_limpio = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', texto_limpio)
-    # Reemplaza saltos de línea múltiples por espacios limpios
+    # 1. Une palabras cortadas por guion con saltos de línea o espacios (ej: "lubri- cante" o "su-\nperior" -> "lubricante", "superior")
+    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s*[\r\n]+\s*([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto)
+    texto_limpio = re.sub(r'([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)-\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)', r'\1\2', texto_limpio)
+    # 2. Reemplaza saltos de línea internos por espacios simples para formar párrafos limpios
+    texto_limpio = re.sub(r'\s*\n\s*', ' ', texto_limpio)
+    # 3. Elimina espacios dobles sobrantes
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
 
 def resaltar_palabras_clave(texto):
-    # Resalta en negritas términos comunes de mantenimiento, lubricación y seguridad
+    # Lista de términos técnicos clave en la planta a resaltar limpiamente como palabras completas
     palabras_clave = [
         "grasa", "aceite", "celerol", "cassida", "eps", "7007", "7203", 
-        "lototo", "sam", "chumacera", "rodamiento", "cadena", "carril", 
-        "brocha", "desengrasante", "limpieza", "seguridad", "presion"
+        "lototo", "sam", "chumacera", "chumaceras", "rodamiento", "rodamientos", 
+        "cadena", "cadenas", "carril", "carriles", "brocha", "desengrasante", "limpieza"
     ]
     texto_resaltado = texto
     for palabra in palabras_clave:
-        patron = re.compile(re.escape(palabra), re.IGNORECASE)
-        texto_resaltado = patron.sub(f"**{palabra.upper()}**", texto_resaltado)
+        # Usa límites de palabra (\b) para evitar romper partes internas de otras palabras
+        patron = re.compile(r'\b(' + re.escape(palabra) + r')\b', re.IGNORECASE)
+        texto_resaltado = patron.sub(r'**\1**', texto_resaltado)
     return texto_resaltado
 
 # --- MODELO DE EMBEDDINGS EN LA NUBE ---
@@ -705,7 +708,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO LIMPIO Y PALABRAS CLAVE EN NEGRITAS) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (TEXTO LIMPIO, SIN GUIONES Y CLAVES DESTACADAS) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -759,7 +762,7 @@ elif st.session_state.tab_activa == "preguntas":
                             archivo_doc = f.get('archivo', 'Documento')
                             pagina_doc = f.get('pagina', 1)
                             
-                            # Limpieza de guiones de corte y resaltado de palabras clave en negritas
+                            # Limpieza profunda de guiones y formato limpio con palabras clave completas en negritas
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             texto_resaltado = resaltar_palabras_clave(texto_limpio)
                             
@@ -768,7 +771,7 @@ elif st.session_state.tab_activa == "preguntas":
                                 <p style="color: #FFD700 !important; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">
                                     📄 [{tipo_doc}] {archivo_doc} — Pág. {pagina_doc}
                                 </p>
-                                <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.5; margin: 0;">
+                                <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.6; margin: 0;">
                                     {texto_resaltado}
                                 </p>
                             </div>
