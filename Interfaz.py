@@ -460,6 +460,16 @@ st.markdown(f"""
         padding: 12px 15px;
         margin-top: 5px;
     }}
+
+    /* Estilo limpio para tarjetas de manuales */
+    .tarjeta-manual {{
+        background-color: #111B2B;
+        border-left: 4px solid #FFD700;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        color: #FFFFFF !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -671,7 +681,7 @@ elif st.session_state.tab_activa == "docs":
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
-# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (RESPUESTA DIRECTA Y BASADA EN EL CONTENIDO) ---
+# --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS (FORMATO LEGIBLE Y LIMPIO) ---
 elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
     
@@ -720,13 +730,23 @@ elif st.session_state.tab_activa == "preguntas":
                     else:
                         st.success("Respuesta extraída de la documentación oficial:")
                         
-                        # Respuesta directa basada en el contenido de los documentos encontrados
-                        respuesta_directa = ""
-                        for f in fragmentos:
-                            respuesta_directa += f"**[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]:**\n"
-                            respuesta_directa += f"> {f.get('texto', '')}\n\n"
-                        
-                        st.markdown(respuesta_directa)
+                        # Renderizado limpio en tarjetas legibles (sin bloques grises pesados)
+                        for idx_f, f in enumerate(fragmentos):
+                            tipo_doc = f.get('tipo', 'Manual')
+                            archivo_doc = f.get('archivo', 'Documento')
+                            pagina_doc = f.get('pagina', 1)
+                            texto_doc = f.get('texto', '')
+                            
+                            st.markdown(f"""
+                            <div class="tarjeta-manual">
+                                <p style="color: #FFD700 !important; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">
+                                    📄 [{tipo_doc}] {archivo_doc} — Pág. {pagina_doc}
+                                </p>
+                                <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.5; margin: 0;">
+                                    {texto_doc}
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
                         st.divider()
                         st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen ({len(fragmentos)})</h4>", unsafe_allow_html=True)
