@@ -266,7 +266,7 @@ def indexar_todos_los_documentos():
                 ruta_tipo = os.path.join(ruta_area, tipo_carpeta)
                 if not os.path.isdir(ruta_tipo): continue
                 linea_normalizada = encontrar_valor_valido(["Línea 5", "Línea 6"], linea) or linea
-                area_normalizada = encontrar_valor_valido(list(ESTRUCTURA_FALLAS.keys()], area) or area
+                area_normalizada = encontrar_valor_valido(list(ESTRUCTURA_FALLAS.keys()), area) or area
                 
                 for archivo in os.listdir(ruta_tipo):
                     ruta_archivo = os.path.join(ruta_tipo, archivo)
@@ -569,7 +569,7 @@ with st.sidebar:
     if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
         with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
             archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} archivo(s), {chunks} fragmento(s).")
+        st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
 
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
@@ -870,26 +870,25 @@ elif st.session_state.tab_activa == "chat":
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    # RESPUESTA DIRECTA Y ADAPTADA A LA PREGUNTA EXACTA DEL USUARIO
                     if "atasco" in p_norm and ("rodillo" in p_norm or "transporte" in p_norm or "caja" in p_norm):
                         respuesta_chat = f"""
 ### 🛠️ Guía Técnica de Resolución: Atascos en Rodillos y Transporte
 Ante un atasco de cajas, envases o bandejas en la sección de rodillos o transporte de la **{linea_sel}**, ejecuta de inmediato la siguiente serie de pasos correctivos y de seguridad:
 
 1. **Aislamiento y Seguridad (LOTOTO / SAM):**
-   - Detén la sección afectada mediante el botón de paro de emergencia o pulsor de descarga y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de introducir manos o herramientas en la zona de rodillos.
+   - Detén la sección afectada mediante el botón de paro de emergencia y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de intervenir mecánicamente.
 
 2. **Inspección Física y Retirada de Obstáculos:**
    - Retira de manera manual y cuidadosa la caja, tarima o envases atascados. Inspecciona si existen fragmentos de cartón, etiquetas sueltas o esquirlas de vidrio que estén frenando el giro de los rodillos.
 
 3. **Verificación de Transmisión y Rodillos Locos:**
-   - Comprueba que los rodillos afectados giren libremente de forma individual. Revisa el estado de las bandas o cadenas de transmisión laterales, asegurándote de que no se hayan salido de sus catenarias o presentado rupturas por sobrecarga.
+   - Comprueba que los rodillos afectados giren libremente de forma individual. Revisa el estado de las bandas o cadenas de transmisión laterales, asegurándote de que no se hayan salido de sus catenarias.
 
 4. **Alineación de Guías y Sensores de Presencia:**
-   - Revisa que los barandales laterales no estén cerrados de más ejerciendo presión lateral excesiva sobre las cajas, y limpia las celdas o sensores fotoeléctricos que detectan el flujo para evitar falsos bloqueos.
+   - Revisa que los barandales laterales no estén cerrados de más ejerciendo presión lateral excesiva, y limpia las celdas o sensores fotoeléctricos que detectan el flujo para evitar falsos bloqueos.
 
 5. **Prueba Operativa y Liberación:**
-   - Retira el personal y las herramientas de la zona de riesgo, desactiva los bloqueos de seguridad y realiza una prueba en vacío (*dry run*) antes de reanudar el flujo continuo con Calidad.
+   - Retira el personal y las herramientas de la zona de riesgo, desactiva los bloqueos de seguridad y realiza una prueba en vacío (*dry run*) antes de reanudar la operación con Calidad.
 """
                     elif "sensor" in p_norm:
                         respuesta_chat = f"""
@@ -901,7 +900,6 @@ Para comprobar si un sensor de posición funciona adecuadamente, realiza los sig
 4. **Estado en HMI/PLC:** Confirma en la interfaz de control de la línea que el bit de entrada digital conmute correctamente de 0 a 1.
 """
                     else:
-                        # Búsqueda general con RAG si no coincide con un caso preestablecido
                         fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                         if fragmentos:
                             f_ref = fragmentos[0]
