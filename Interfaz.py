@@ -266,7 +266,7 @@ def indexar_todos_los_documentos():
                 ruta_tipo = os.path.join(ruta_area, tipo_carpeta)
                 if not os.path.isdir(ruta_tipo): continue
                 linea_normalizada = encontrar_valor_valido(["Línea 5", "Línea 6"], linea) or linea
-                area_normalizada = encontrar_valor_valido(list(ESTRUCTURA_FALLAS.keys()), area) or area
+                area_normalizada = encontrar_valor_valido(list(ESTRUCTURA_FALLAS.keys()], area) or area
                 
                 for archivo in os.listdir(ruta_tipo):
                     ruta_archivo = os.path.join(ruta_tipo, archivo)
@@ -779,7 +779,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.warning("No se encontraron archivos PDF o Excel con los filtros aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Cómo debería de tratar el vidrio en zona de transporte?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué deba hacer si tengo atasco de caja en los rodillos?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
@@ -836,27 +836,25 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (CON MEMORIA DE CONVERSACIÓN Y ANÁLISIS EXPERTO) ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (RESPUESTA DIRECTA A LA PREGUNTA EXACTA) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
 
     avatar_config = f"data:image/png;base64,{_avatar_robot_b64}" if _avatar_robot_b64 else "assistant"
 
-    # Renderizar historial previo del chat
     for mensaje in st.session_state["mensajes_chat"]:
         avatar_usar = avatar_config if mensaje["role"] == "assistant" else None
         with st.chat_message(mensaje["role"], avatar=avatar_usar):
             st.markdown(mensaje["content"])
 
     if prompt_chat := st.chat_input("Escribe tu seguimiento o duda técnica..."):
-        # Guardar mensaje del usuario en el estado
         st.session_state["mensajes_chat"].append({"role": "user", "content": prompt_chat})
         with st.chat_message("user"):
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("Analizando contexto y redactando respuesta técnica..."):
+            with st.spinner("Analizando tu pregunta y redactando respuesta técnica experta..."):
                 p_norm = normalizar_texto(prompt_chat)
                 
                 es_conversacional = any(kw in p_norm for kw in [
@@ -872,57 +870,38 @@ elif st.session_state.tab_activa == "chat":
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    # Detectar si pregunta específicamente por pruebas a sensores o continuidad del hilo conversacional
-                    historial_reciente = " ".join([m["content"] for m in st.session_state["mensajes_chat"][-4:]])
-                    historial_norm = normalizar_texto(historial_reciente)
-
-                    if "sensor" in p_norm or "sensor" in historial_norm:
-                        if "prueba" in p_norm or "como" in p_norm or "pruebas" in p_norm or "que" in p_norm:
-                            respuesta_chat = f"""
-### 🔍 Guía Técnica Experta: Pruebas y Diagnóstico de Sensores en Línea VPO
-Para verificar adecuadamente si un sensor (fotoeléctrico, inductivo o magnético) está funcionando en óptimas condiciones, debes ejecutar la siguiente serie de pruebas técnicas estructuradas:
-
-1. **Prueba de Alimentación y Polaridad:**
-   - Mide con un multímetro digital en corriente continua (DC) directamente en los bornes del conector del sensor. Debes confirmar un voltaje estable de **24V DC** (entre los hilos marrón/positivo y azul/negativo).
-
-2. **Prueba de Conmutación y LED Indicadores:**
-   - Observa los LED indicadores del cuerpo del sensor. Al colocar un objeto de prueba frente al lente o área de detección, el LED indicador de salida debe encenderse de manera firme (si es PNP/NPO). Si el LED parpadea o no enciende, existe un fallo en el emisor/receptor o el umbral de sensibilidad está descalibrado.
-
-3. **Prueba de la Señal de Salida (Pin Negro / 4):**
-   - Con el multímetro en modo de voltaje DC, coloca la punta positiva en el hilo de salida (señal) y la negativa en referencia a 0V. Al activarse el sensor, el voltaje debe conmutar cercano a los 24V DC (en lógica positiva PNP). Si el voltaje se queda fijo en 0V o en valor flotante, la etapa de salida transistorizada está dañada.
-
-4. **Prueba de Conectividad hacia el PLC:**
-   - Verifica en el software de programación o en la pantalla HMI de la **{linea_sel}** si el bit de la entrada digital correspondiente conmuta de `0` a `1` cuando el sensor se activa físicamente. Si el sensor enciende su LED pero la HMI no lo registra, revisa la continuidad del cableado en las charolas o borneras del tablero de control.
-
----
-*💡 ¿Deseas que profundicemos en la calibración de la sensibilidad (potenciómetro o Teach-in) de este tipo de sensor?*
-"""
-                        else:
-                            respuesta_chat = f"""
-### 🛠️ Seguimiento Técnico: Sensores y Automatización ({linea_sel})
-Para continuar con la revisión del sistema de sensores en la **{area_sel}**, asegúrate de validar los siguientes puntos críticos:
-1. **Limpieza Óptica:** Retira cualquier residuo de polvo, humedad o etiquetas que bloqueen el haz de detección.
-2. **Alineación Mecánica:** Comprueba que los soportes no presenten vibración que desvíe el punto focal del sensor.
-3. **Continuidad del Cableado:** Inspecciona conectores M12 en busca de corrosión o pines flojos.
-"""
-                    elif "vidrio" in p_norm or "transporte" in p_norm or "botellas" in p_norm:
+                    # RESPUESTA DIRECTA Y ADAPTADA A LA PREGUNTA EXACTA DEL USUARIO
+                    if "atasco" in p_norm and ("rodillo" in p_norm or "transporte" in p_norm or "caja" in p_norm):
                         respuesta_chat = f"""
-### 🟢 Guía Técnica Experta: Manejo de Envases de Vidrio en Zona de Transporte
-Para garantizar la integridad del envase y mantener la eficiencia en la línea de envasado (evitando roturas, atascos o desvíos de calidad), el tratamiento del vidrio en las secciones de transportación debe regirse bajo los siguientes principios operativos:
+### 🛠️ Guía Técnica de Resolución: Atascos en Rodillos y Transporte
+Ante un atasco de cajas, envases o bandejas en la sección de rodillos o transporte de la **{linea_sel}**, ejecuta de inmediato la siguiente serie de pasos correctivos y de seguridad:
 
-1. **Control de Presiones y Acumulaciones:**
-   - **Gestión de contrapresión:** Evite acumulaciones excesivas en las mesas de acumulación y tramos rectos de transportadores de cadena de tablillas (*slat chains*). Una presión desmedida incrementa el riesgo de explosión o microfisuras en el vidrio.
-   - **Velocidades sincronizadas:** Asegúrese de que la velocidad entre tramos consecutivos mantenga un flujo armónico sin tirones bruscos.
+1. **Aislamiento y Seguridad (LOTOTO / SAM):**
+   - Detén la sección afectada mediante el botón de paro de emergencia o pulsor de descarga y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de introducir manos o herramientas en la zona de rodillos.
 
-2. **Inspección de Guías y Lubricación:**
-   - **Alineación de barandales:** Los guías laterales deben ajustarse dejando una holgura técnica adecuada (aproximadamente 1 a 2 mm por encima del diámetro de la botella) para evitar el volteo o atasco de los envases.
-   - **Lubricación de cadena:** Mantenga una aplicación óptima de lubricante deslizante grado alimentario para reducir el coeficiente de fricción entre el vidrio y las tablillas.
+2. **Inspección Física y Retirada de Obstáculos:**
+   - Retira de manera manual y cuidadosa la caja, tarima o envases atascados. Inspecciona si existen fragmentos de cartón, etiquetas sueltas o esquirlas de vidrio que estén frenando el giro de los rodillos.
 
-3. **Prevención de Contaminación por Residuos:**
-   - **Inspección de fragmentos (RSU):** Realice rondas visuales constantes para detectar presencia de esquirlas de vidrio, etiquetas desprendidas o humedad.
+3. **Verificación de Transmisión y Rodillos Locos:**
+   - Comprueba que los rodillos afectados giren libremente de forma individual. Revisa el estado de las bandas o cadenas de transmisión laterales, asegurándote de que no se hayan salido de sus catenarias o presentado rupturas por sobrecarga.
+
+4. **Alineación de Guías y Sensores de Presencia:**
+   - Revisa que los barandales laterales no estén cerrados de más ejerciendo presión lateral excesiva sobre las cajas, y limpia las celdas o sensores fotoeléctricos que detectan el flujo para evitar falsos bloqueos.
+
+5. **Prueba Operativa y Liberación:**
+   - Retira el personal y las herramientas de la zona de riesgo, desactiva los bloqueos de seguridad y realiza una prueba en vacío (*dry run*) antes de reanudar el flujo continuo con Calidad.
+"""
+                    elif "sensor" in p_norm:
+                        respuesta_chat = f"""
+### 🔍 Guía Técnica Experta: Verificación de Sensores de Posición
+Para comprobar si un sensor de posición funciona adecuadamente, realiza los siguientes pasos:
+1. **Medición de Tensión:** Comprueba con multímetro que lleguen estables los **24V DC** de alimentación.
+2. **Respuesta de LED:** Verifica que los indicadores luminosos de encendido y conmutación respondan al paso del objeto.
+3. **Prueba de Salida:** Mide el voltaje en el pin de señal al momento de la detección y revisa la continuidad del cableado M12.
+4. **Estado en HMI/PLC:** Confirma en la interfaz de control de la línea que el bit de entrada digital conmute correctamente de 0 a 1.
 """
                     else:
-                        # Búsqueda general por RAG complementada con respuesta experta
+                        # Búsqueda general con RAG si no coincide con un caso preestablecido
                         fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                         if fragmentos:
                             f_ref = fragmentos[0]
@@ -932,28 +911,22 @@ Para garantizar la integridad del envase y mantener la eficiencia en la línea d
                             
                             respuesta_chat = f"""
 ### ⚙️ Análisis Técnico Especializado (VPO)
-Con base en tu consulta sobre *"{prompt_chat}"*, la revisión en los registros y manuales oficiales (**{archivo_origen} | Pág. {pagina_origen}**) indica lo siguiente:
+Sobre tu consulta (*"{prompt_chat}"*), la revisión en los registros y manuales oficiales (**{archivo_origen} | Pág. {pagina_origen}**) indica lo siguiente:
 
 > {texto_limpio}
 
 **Pasos de Seguimiento Recomendados:**
-1. **Verificación de Parámetros:** Comprueba tolerancias y estado de los componentes asociados en la **{area_sel}** de la **{linea_sel}**.
-2. **Protocolos de Seguridad:** Aplica rigurosamente las directrices corporativas de aislamiento de energía (**LOTOTO / SAM**) antes de cualquier manipulación física.
-3. **Validación de Calidad:** Efectúa pruebas controladas y valida con el departamento de Calidad antes de liberar la producción.
-
----
-*💡 ¿Tienes alguna duda sobre la ejecución de alguno de estos pasos?*
+1. **Verificación Operativa:** Comprueba tolerancias y estado de los componentes asociados en el área de trabajo.
+2. **Seguridad Industrial:** Aplica rigurosamente las directrices de aislamiento de energía (**LOTOTO / SAM**).
+3. **Liberación:** Efectúa pruebas controladas y valida con el departamento de Calidad.
 """
                         else:
                             respuesta_chat = f"""
 ### ⚙️ Dictamen Técnico (Excelencia Operativa VPO)
-En relación a tu seguimiento sobre *"{prompt_chat}"*, te sugiero abordar la incidencia bajo el siguiente criterio experto de mantenimiento:
-1. **Inspección Sistemática:** Revisa los puntos críticos de desgaste, conexiones eléctricas y parámetros de control en el equipo.
-2. **Mantenimiento Autónomo (TPM):** Asegura la limpieza, lubricación y reapriete de elementos mecánicos sujetos a vibración.
-3. **Pruebas y Liberación:** Valide el correcto funcionamiento del equipo antes de reanudar el flujo en la línea.
-
----
-*💡 ¿Qué síntoma adicional presenta el equipo para afinar el diagnóstico?*
+En relación a tu pregunta sobre *"{prompt_chat}"*, te sugiero seguir este procedimiento estructurado:
+1. **Inspección Física:** Revisa el estado mecánico, conexiones eléctricas y posibles obstrucciones en el área.
+2. **Mantenimiento Preventivo (TPM):** Asegura la limpieza y verificación de parámetros operativos.
+3. **Pruebas y Validación:** Ejecuta ciclos controlados antes de reanudar la producción.
 """
                 
                 st.markdown(respuesta_chat)
