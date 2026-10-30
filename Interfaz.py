@@ -5,6 +5,7 @@ import base64
 import re
 import unicodedata
 import numpy as np
+import pandas as pd
 from pypdf import PdfReader
 import chromadb
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
@@ -140,14 +141,14 @@ def encontrar_valor_valido(opciones_validas, texto_leido):
             return opcion
     return None
 
-def listar_pdfs(linea, area, tipo_doc):
+def listar_archivos(linea, area, tipo_doc, extension=".pdf"):
     carpeta_linea = encontrar_subcarpeta(DOCS_DIR, linea)
     carpeta_area = encontrar_subcarpeta(carpeta_linea, area) if carpeta_linea else None
     carpeta_tipo = encontrar_subcarpeta(carpeta_area, TIPO_CARPETA[tipo_doc]) if carpeta_area else None
     if not carpeta_tipo: return []
-    return [os.path.join(carpeta_tipo, f) for f in os.listdir(carpeta_tipo) if f.lower().endswith(".pdf")]
+    return [os.path.join(carpeta_tipo, f) for f in os.listdir(carpeta_tipo) if f.lower().endswith(extension)]
 
-def listar_archivos_pdf_filtrados(linea=None, area=None):
+def listar_archivos_filtrados(linea=None, area=None, extension=None):
     archivos = set()
     base = DOCS_DIR
     if linea:
@@ -161,13 +162,15 @@ def listar_archivos_pdf_filtrados(linea=None, area=None):
 
     for root, dirs, files in os.walk(base):
         for f in files:
-            if f.lower().endswith(".pdf"):
-                archivos.add(f)
+            if extension:
+                if f.lower().endswith(extension): archivos.add(f)
+            else:
+                if f.lower().endswith((".pdf", ".xlsx")): archivos.add(f)
     return sorted(list(archivos))
 
 @st.cache_data(show_spinner=False)
-def leer_pdf_bytes_cacheado(ruta_pdf, fecha_modificacion):
-    with open(ruta_pdf, "rb") as f: return f.read()
+def leer_archivo_bytes_cacheado(ruta_archivo, fecha_modificacion):
+    with open(ruta_archivo, "rb") as f: return f.read()
 
 # --- RAG, RENDERIZADO RAM E ÍNDICE VECTORIAL ---
 @st.cache_resource
@@ -177,42 +180,32 @@ def obtener_coleccion_vectorial():
 
 def resolver_ruta_y_pagina(top_f):
     if not top_f: return None, 1
-    ruta_pdf = top_f.get("ruta_pdf")
-    pagina = top_f.get("pagina")
+    ruta_archivo = top_f.get("ruta_pdf")
+    pagina = top_f.get("pagina", 1)
     archivo_nombre = top_f.get("archivo")
 
-    if not ruta_pdf or not os.path.exists(ruta_pdf):
+    if not ruta_archivo or not os.path.exists(ruta_archivo):
         if archivo_nombre:
             for root, dirs, files in os.walk(DOCS_DIR):
                 for f in files:
                     if f.lower() == archivo_nombre.lower():
-                        ruta_pdf = os.path.join(root, f)
+                        ruta_archivo = os.path.join(root, f)
                         break
-                if ruta_pdf and os.path.exists(ruta_pdf): break
+                if ruta_archivo and os.path.exists(ruta_archivo): break
 
-    if not ruta_pdf or not os.path.exists(ruta_pdf): return None, 1
+    if not ruta_archivo or not os.path.exists(ruta_archivo): return None, 1
+    return ruta_archivo, int(pagina)
 
-    if not pagina:
-        try:
-            doc = fitz.open(ruta_pdf)
-            texto_fragmento = top_f.get("texto", "").strip()
-            palabras = texto_fragmento.split()
-            muestra = " ".join(palabras[:5]) if len(palabras) >= 5 else texto_fragmento
-            pagina_encontrada = 1
-            if muestra:
-                for idx_p, page in enumerate(doc):
-                    text_p = page.get_text() or ""
-                    if muestra.lower() in text_p.lower():
-                        pagina_encontrada = idx_p + 1
-                        break
-            pagina = pagina_encontrada
-        except Exception:
-            pagina = 1
-
-    return ruta_pdf, int(pagina)
-
-def obtener_imagen_pagina_ram(pdf_path, page_number, dpi=300):
-    doc = fitz.open(pdf_path)
+def obtener_imagen_pagina_ram(archivo_path, page_number, dpi=300):
+    if archivo_path.lower().endswith(".xlsx"):
+        # Si es excel, generamos una vista previa en texto/imagen simulada o leemos el df como imagen si es necesario
+        # Para simplificar y evitar errores en RAM, retornamos una página en blanco o manejamos el texto
+        doc = fitz.open() # Documento vacío
+        page = doc.new_page()
+        pix = page.get_pixmap(dpi=dpi)
+        return pix.tobytes("png")
+    
+    doc = fitz.open(archivo_path)
     page = doc[page_number - 1]
     pix = page.get_pixmap(dpi=dpi)
     return pix.tobytes("png")
@@ -222,23 +215,24 @@ def obtener_evidencias_priorizadas(fragmentos):
     vistos = set()
     
     for f in fragmentos:
-        pdf_path, pag_num = resolver_ruta_y_pagina(f)
-        if pdf_path and os.path.exists(pdf_path):
-            clave = (pdf_path, pag_num)
+        archivo_path, pag_num = resolver_ruta_y_pagina(f)
+        if archivo_path and os.path.exists(archivo_path):
+            clave = (archivo_path, pag_num)
             if clave not in vistos:
                 vistos.add(clave)
                 tiene_img = False
-                try:
-                    doc = fitz.open(pdf_path)
-                    page = doc[pag_num - 1]
-                    tiene_img = (len(page.get_images()) > 0) or (len(page.get_drawings()) > 8)
-                except Exception:
-                    pass
+                if archivo_path.lower().endswith(".pdf"):
+                    try:
+                        doc = fitz.open(archivo_path)
+                        page = doc[pag_num - 1]
+                        tiene_img = (len(page.get_images()) > 0) or (len(page.get_drawings()) > 8)
+                    except Exception:
+                        pass
                 
                 evidencias.append({
-                    "pdf_path": pdf_path,
+                    "pdf_path": archivo_path,
                     "pagina": pag_num,
-                    "archivo": f.get("archivo", os.path.basename(pdf_path)),
+                    "archivo": f.get("archivo", os.path.basename(archivo_path)),
                     "tipo": f.get("tipo", "Documento"),
                     "texto": f.get("texto", ""),
                     "tiene_imagen": tiene_img
@@ -277,36 +271,68 @@ def indexar_todos_los_documentos():
                 area_normalizada = encontrar_valor_valido(list(ESTRUCTURA_FALLAS.keys()), area) or area
                 
                 for archivo in os.listdir(ruta_tipo):
-                    if not archivo.lower().endswith(".pdf"): continue
-                    ruta_pdf = os.path.join(ruta_tipo, archivo)
+                    ruta_archivo = os.path.join(ruta_tipo, archivo)
                     
-                    try: doc = fitz.open(ruta_pdf)
-                    except Exception: continue
-                        
-                    total_archivos += 1
-                    for page_num in range(len(doc)):
-                        page_text = doc[page_num].get_text() or ""
-                        if not page_text.strip(): continue
-                        
-                        chunks = trocear_texto(page_text)
-                        for idx, chunk in enumerate(chunks):
-                            embedding = obtener_embedding(chunk)
-                            id_unico = f"{linea_normalizada}|{area_normalizada}|{tipo_carpeta}|{archivo}|p{page_num + 1}|{idx}"
+                    if archivo.lower().endswith(".pdf"):
+                        try: doc = fitz.open(ruta_archivo)
+                        except Exception: continue
                             
-                            coleccion.upsert(
-                                ids=[id_unico],
-                                embeddings=[embedding],
-                                documents=[chunk],
-                                metadatas=[{
-                                    "linea": linea_normalizada,
-                                    "area": area_normalizada,
-                                    "tipo": tipo_carpeta,
-                                    "archivo": archivo,
-                                    "ruta_pdf": ruta_pdf,
-                                    "pagina": page_num + 1
-                                }],
-                            )
-                            total_chunks += 1
+                        total_archivos += 1
+                        for page_num in range(len(doc)):
+                            page_text = doc[page_num].get_text() or ""
+                            if not page_text.strip(): continue
+                            
+                            chunks = trocear_texto(page_text)
+                            for idx, chunk in enumerate(chunks):
+                                embedding = obtener_embedding(chunk)
+                                id_unico = f"{linea_normalizada}|{area_normalizada}|{tipo_carpeta}|{archivo}|p{page_num + 1}|{idx}"
+                                
+                                coleccion.upsert(
+                                    ids=[id_unico],
+                                    embeddings=[embedding],
+                                    documents=[chunk],
+                                    metadatas=[{
+                                        "linea": linea_normalizada,
+                                        "area": area_normalizada,
+                                        "tipo": tipo_carpeta,
+                                        "archivo": archivo,
+                                        "ruta_pdf": ruta_archivo,
+                                        "pagina": page_num + 1
+                                    }],
+                                )
+                                total_chunks += 1
+
+                    elif archivo.lower().endswith(".xlsx"):
+                        try:
+                            df = pd.read_excel(ruta_archivo, sheet_name=None) # Lee todas las hojas
+                        except Exception:
+                            continue
+                        
+                        total_archivos += 1
+                        for nombre_hoja, sheet_df in df.items():
+                            texto_hoja = sheet_df.to_string(index=False)
+                            if not texto_hoja.strip(): continue
+                            
+                            chunks = trocear_texto(texto_hoja, tam_chunk=150, solape=30)
+                            for idx, chunk in enumerate(chunks):
+                                embedding = obtener_embedding(chunk)
+                                id_unico = f"{linea_normalizada}|{area_normalizada}|{tipo_carpeta}|{archivo}|hoja_{nombre_hoja}|{idx}"
+                                
+                                coleccion.upsert(
+                                    ids=[id_unico],
+                                    embeddings=[embedding],
+                                    documents=[chunk],
+                                    metadatas=[{
+                                        "linea": linea_normalizada,
+                                        "area": area_normalizada,
+                                        "tipo": tipo_carpeta,
+                                        "archivo": archivo,
+                                        "ruta_pdf": ruta_archivo,
+                                        "pagina": 1
+                                    }],
+                                )
+                                total_chunks += 1
+                                
     return total_archivos, total_chunks
 
 def buscar_contexto_global(pregunta, top_k=3):
@@ -543,9 +569,9 @@ with st.sidebar:
     else: st.caption(f"{_total_indexado} fragmento(s) indexado(s) actualmente.")
 
     if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
-        with st.spinner("Procesando documentos e indexando contenido por páginas..."):
+        with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
             archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
+        st.success(f"Índice actualizado: {archivos} archivo(s), {chunks} fragmento(s).")
 
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
@@ -580,7 +606,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (PASOS DETALLADOS Y SECUENCIALES DE RESOLUCIÓN) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -623,7 +649,6 @@ if st.session_state.tab_activa == "plan":
 
                 st.success(f"Plan secuencial generado para {linea_sel.upper()} - {area_sel.upper()}")
 
-                # Generación de una serie detallada de pasos lógicos adaptados al tipo de falla
                 p_norm = normalizar_texto(desc)
                 t_norm = normalizar_texto(tipo_falla_sel)
 
@@ -651,7 +676,7 @@ if st.session_state.tab_activa == "plan":
 - [ ] **Paso 2: Limpieza previa de boquillas y chumaceras.** Remover el polvo, grasa vieja y contaminantes acumulados alrededor de las graseras o puntos de aplicación para evitar que ingresen al sistema.
 - [ ] **Paso 3: Selección del lubricante correcto.** Comprobar que el insumo a utilizar corresponda exactamente al grado alimentario autorizado (ej. CASSIDA / CELEROL) según manual.
 - [ ] **Paso 4: Aplicación dosificada.** Suministrar la cantidad recomendada de grasa o aceite mediante equipo de aplicación adecuado (pistola o brocha).
-- [ ] **Paso 5: Limpieza de excedentes.** Retirar el lubricante sobrante para evitar escurrimientos o acumulación indeseada en el entorno de los envases.
+- [ ] **Paso 5: Limpieza de excedentes.** Retirar el lubricante sobrante para prevenir escurrimientos o acumulación indeseada en el entorno de los envases.
 - [ ] **Paso 6: Registro y verificación.** Comprobar el libre movimiento de los componentes engrasados y registrar el mantenimiento ejecutado.
 """
                 else:
@@ -687,13 +712,12 @@ if st.session_state.tab_activa == "plan":
 
                 st.markdown(respuesta_generada)
                 
-                # Renderizar siempre las evidencias visuales y pestañas con los documentos disponibles
                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
                 if not evidencias_calc and DOCS_DIR:
                     for root, dirs, files in os.walk(DOCS_DIR):
                         for f in files:
-                            if f.lower().endswith(".pdf"):
-                                evidencias_calc = [{"pdf_path": os.path.join(root, f), "pagina": 1, "archivo": f, "tipo": "Manual Operativo"}]
+                            if f.lower().endswith((".pdf", ".xlsx")):
+                                evidencias_calc = [{"pdf_path": os.path.join(root, f), "pagina": 1, "archivo": f, "tipo": "Documento Operativo"}]
                                 break
                         if evidencias_calc: break
 
@@ -705,8 +729,11 @@ if st.session_state.tab_activa == "plan":
                     for idx, tab in enumerate(tabs):
                         e = evidencias_calc[idx]
                         with tab:
-                            img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                            st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                            if e["pdf_path"].lower().endswith(".pdf"):
+                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                            else:
+                                st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel procesada y analizada por la IA.")
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -714,20 +741,25 @@ if st.session_state.tab_activa == "plan":
 elif st.session_state.tab_activa == "docs":
     st.markdown(f"<h3>Documentos disponibles: {area_sel} — {linea_sel}</h3>", unsafe_allow_html=True)
     tipo_doc_sel = st.selectbox("Tipo de documento:", list(TIPO_CARPETA.keys()))
-    pdfs_encontrados = listar_pdfs(linea_sel, area_sel, tipo_doc_sel)
     
-    if pdfs_encontrados:
-        st.success(f"Se encontraron {len(pdfs_encontrados)} documento(s).")
-        for idx, ruta_pdf in enumerate(pdfs_encontrados):
-            nombre_archivo = os.path.basename(ruta_pdf)
-            pdf_bytes = leer_pdf_bytes_cacheado(ruta_pdf, os.path.getmtime(ruta_pdf))
-            st.download_button(label=f"DESCARGAR {nombre_archivo}", data=pdf_bytes, file_name=nombre_archivo, mime="application/pdf", key=f"desc_{idx}")
+    # Listar tanto PDFs como Excel
+    pdfs_encontrados = listar_archivos(linea_sel, area_sel, tipo_doc_sel, extension=".pdf")
+    excels_encontrados = listar_archivos(linea_sel, area_sel, tipo_doc_sel, extension=".xlsx")
+    todos_docs = pdfs_encontrados + excels_encontrados
+    
+    if todos_docs:
+        st.success(f"Se encontraron {len(todos_docs)} documento(s) (PDF / Excel).")
+        for idx, ruta_archivo in enumerate(todos_docs):
+            nombre_archivo = os.path.basename(ruta_archivo)
+            archivo_bytes = leer_archivo_bytes_cacheado(ruta_archivo, os.path.getmtime(ruta_archivo))
+            mime_tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if nombre_archivo.lower().endswith(".xlsx") else "application/pdf"
+            st.download_button(label=f"DESCARGAR {nombre_archivo}", data=archivo_bytes, file_name=nombre_archivo, mime=mime_tipo, key=f"desc_{idx}")
     else:
         st.info("No hay documentos disponibles para la selección actual.")
 
 # --- SECCIÓN 3: PREGUNTAR A LOS DOCUMENTOS ---
 elif st.session_state.tab_activa == "preguntas":
-    st.markdown("<h3>Pregúntale a los manuales, PDR, SOP y RDA</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>Pregúntale a los manuales, PDR, SOP, RDA y Hojas Excel</h3>", unsafe_allow_html=True)
     
     col_f1, col_f2 = st.columns(2)
     with col_f1: usar_linea_actual = st.checkbox(f"Buscar solo en {linea_sel}", value=True)
@@ -744,13 +776,13 @@ elif st.session_state.tab_activa == "preguntas":
 
     archivo_especifico = None
     if alcance_busqueda == "Un documento en específico":
-        archivos_disponibles = listar_archivos_pdf_filtrados(filtro_linea, filtro_area)
+        archivos_disponibles = listar_archivos_filtrados(filtro_linea, filtro_area)
         if archivos_disponibles:
             archivo_especifico = st.selectbox("Selecciona el documento específico:", archivos_disponibles)
         else:
-            st.warning("No se encontraron documentos PDF con los filtros de Línea y Área aplicados.")
+            st.warning("No se encontraron archivos PDF o Excel con los filtros aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué grasa se ocupa en lubricación de depaletizadora?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué información contienen los reportes Excel o manuales?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
@@ -758,7 +790,7 @@ elif st.session_state.tab_activa == "preguntas":
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
                 st.error("Por favor selecciona un documento válido de la lista.")
             else:
-                with st.spinner("Buscando la respuesta exacta en los manuales..."):
+                with st.spinner("Buscando la respuesta exacta en los manuales y hojas de Excel..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
@@ -772,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
                     if not fragmentos:
                         st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
                     else:
-                        st.success("Respuesta extraída de la documentación oficial:")
+                        st.success("Respuesta extraída de la documentación oficial (PDF / Excel):")
                         
                         for idx_f, f in enumerate(fragmentos[:3]):
                             tipo_doc = f.get('tipo', 'Manual')
@@ -783,7 +815,7 @@ elif st.session_state.tab_activa == "preguntas":
                             st.markdown(f"""
                             <div class="tarjeta-manual">
                                 <p style="color: #FFD700 !important; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">
-                                    📄 [{tipo_doc}] {archivo_doc} — Pág. {pagina_doc}
+                                    📄 [{tipo_doc}] {archivo_doc}
                                 </p>
                                 <p style="color: #E0E0E0 !important; font-size: 0.9em; line-height: 1.6; margin: 0;">
                                     {texto_limpio}
@@ -794,13 +826,16 @@ elif st.session_state.tab_activa == "preguntas":
                         st.divider()
                         st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
-                        titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias]
+                        titulos_tabs = [f"{e['archivo']}" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
                         for idx, tab in enumerate(tabs):
                             e = evidencias[idx]
                             with tab:
-                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                st.image(img_bytes, caption=f"Documento de origen: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                if e["pdf_path"].lower().endswith(".pdf"):
+                                    img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                    st.image(img_bytes, caption=f"Documento de origen: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                else:
+                                    st.info(f"El archivo analizado '{e['archivo']}' es un reporte en formato Excel (.xlsx).")
         else:
             st.error("Por favor, escribe una pregunta.")
 
@@ -832,7 +867,7 @@ elif st.session_state.tab_activa == "chat":
 
                 if es_conversacional:
                     if "que sabes hacer" in p_norm or "ayuda" in p_norm:
-                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Generar planes de acción detallados ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM.\n* Resolver dudas sobre cualquier área o equipo de la planta."
+                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a:\n* Consultar manuales técnicos y procedimientos (SOP, PDR, RDA).\n* Procesar e indexar archivos PDF y hojas de cálculo Excel (.xlsx).\n* Generar planes de acción detallados ante fallas mecánicas, eléctricas o de calidad.\n* Guiarte en la aplicación de protocolos de seguridad como LOTOTO y SAM."
                     elif any(saludo in p_norm for saludo in ["hola", "buenos dias", "buenas tardes", "que tal", "como estas"]):
                         respuesta_chat = "¡Hola! ¿Qué avería, procedimiento o duda técnica deseas consultar hoy en la planta de envasado?"
                     else:
@@ -842,16 +877,16 @@ elif st.session_state.tab_activa == "chat":
                     if fragmentos:
                         f_ref = fragmentos[0]
                         texto_limpio = limpiar_texto_pdf(f_ref.get('texto', ''))
-                        respuesta_chat = f"**Análisis Técnico (Documento: {f_ref.get('archivo')} | Página {f_ref.get('pagina', 1)}):**\n\n> {texto_limpio}\n\n*Plan Recomendado:* Aplique las pautas indicadas en el manual, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
+                        respuesta_chat = f"**Análisis Técnico (Archivo: {f_ref.get('archivo')}):**\n\n> {texto_limpio}\n\n*Plan Recomendado:* Aplique las pautas indicadas, asegurando los protocolos de seguridad (LOTOTO / SAM) y validación de calidad."
                     else:
                         respuesta_chat = f"Entendido respecto a tu consulta sobre *\"{prompt_chat}\"*. Para asegurar la excelencia operativa en el área de envasado, verifique las tolerancias mecánicas, revise la lubricación o sensores según aplique, y ejecute la validación con calidad antes de liberar la línea."
                 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
+# --- SECCIÓN 5: SUBIR UN DOCUMENTO (SOPORTE PARA PDF Y XLSX) ---
 elif st.session_state.tab_activa == "subir":
-    st.markdown("<h3>Subir Nuevo Documento a la Biblioteca</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>Subir Nuevo Documento a la Biblioteca (PDF o Excel)</h3>", unsafe_allow_html=True)
     
     col_up1, col_up2 = st.columns([1, 1], gap="large")
     
@@ -865,8 +900,8 @@ elif st.session_state.tab_activa == "subir":
         st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
 
     with col_up2:
-        st.markdown("#### Carga de Archivo PDF")
-        archivo_subido = st.file_uploader("Selecciona el archivo PDF de tu computadora:", type=["pdf"], key="file_uploader_vpo")
+        st.markdown("#### Carga de Archivo (PDF o XLSX)")
+        archivo_subido = st.file_uploader("Selecciona el archivo PDF o Excel de tu computadora:", type=["pdf", "xlsx"], key="file_uploader_vpo")
         auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
         btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
         
@@ -874,19 +909,19 @@ elif st.session_state.tab_activa == "subir":
             if archivo_subido is not None:
                 carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
                 os.makedirs(carpeta_destino, exist_ok=True)
-                ruta_completa_pdf = os.path.join(carpeta_destino, archivo_subido.name)
+                ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
                 
-                with open(ruta_completa_pdf, "wb") as f:
+                with open(ruta_completa_archivo, "wb") as f:
                     f.write(archivo_subido.getbuffer())
                 
                 st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
                 
                 if auto_index:
-                    with st.spinner("Indexando nuevo documento en la base de datos ChromaDB..."):
+                    with st.spinner("Indexando nuevo documento/hoja de Excel en la base de datos ChromaDB..."):
                         tot_arch, tot_chk = indexar_todos_los_documentos()
                     st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
             else:
-                st.error("Por favor selecciona un archivo PDF antes de presionar Guardar.")
+                st.error("Por favor selecciona un archivo PDF o Excel antes de presionar Guardar.")
 
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("<center><p style='color: #FFD700; font-weight: bold;'>MELENA | CONFIDENCIAL - Uso exclusivo personal autorizado Grupo Modelo</p></center>", unsafe_allow_html=True)
