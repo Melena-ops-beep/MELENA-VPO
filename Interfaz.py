@@ -569,7 +569,7 @@ with st.sidebar:
     if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
         with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
             archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
+        st.success(f"Índice actualizado: {archivos} archivo(s), {chunks} fragmento(s).")
 
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
@@ -836,7 +836,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (RESPUESTA DIRECTA A LA PREGUNTA EXACTA) ---
+# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (MOTOR DE PENSAMIENTO Y ANÁLISIS DINÁMICO) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -854,7 +854,7 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("Analizando tu pregunta y redactando respuesta técnica experta..."):
+            with st.spinner("Analizando consulta y pensando solución técnica experta..."):
                 p_norm = normalizar_texto(prompt_chat)
                 
                 es_conversacional = any(kw in p_norm for kw in [
@@ -870,36 +870,63 @@ elif st.session_state.tab_activa == "chat":
                     else:
                         respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
                 else:
-                    if "atasco" in p_norm and ("rodillo" in p_norm or "transporte" in p_norm or "caja" in p_norm):
+                    # MOTOR INTELIGENTE DE ANÁLISIS DINÁMICO SEGÚN EL TEMA DE LA PREGUNTA
+                    if "rechinamiento" in p_norm or "chirrido" in p_norm or "ruido" in p_norm or "friccion" in p_norm:
+                        respuesta_chat = f"""
+### 🟢 Guía Técnica Experta: Solución ante Rechinamientos y Ruidos Mecánicos
+Ante un problema de rechinamiento o fricción anómala en los elementos mecánicos de la **{linea_sel}**, te sugiero aplicar el siguiente procedimiento estructurado de diagnóstico:
+
+1. **Localización Auditiva y Térmica del Foco:**
+   - Emplea un bastón de escucha o una cámara termográfica para ubicar con precisión el punto exacto donde se genera la fricción (chumaceras, rodamientos, guías o cadenas). Una temperatura elevada en el soporte confirma el punto de fallo inminente.
+
+2. **Inspección del Sistema de Lubricación:**
+   - Verifica que los puntos de engrase o sistemas automáticos de lubricación estén suministrando el insumo correcto. Confirma que se esté utilizando grasa o aceite grado alimentario autorizado (ej. CASSIDA / CELEROL) según las especificaciones del fabricante.
+
+3. **Revisión de Alineación y Tolerancias:**
+   - Comprueba la alineación de flechas, poleas, chumaceras y barandales de transporte. Un desalineamiento angular o axial genera cargas laterales excesivas que provocan rechinamientos y desgaste prematuro.
+
+4. **Estado de Rodamientos y Sellos:**
+   - Si el rechinamiento persiste tras lubricar, es muy probable que exista un rodamiento con fatiga interna, daño en pistas o contaminación por humedad. Programar su sustitución bajo protocolo de mantenimiento preventivo.
+"""
+                    elif "atasco" in p_norm and ("rodillo" in p_norm or "transporte" in p_norm or "caja" in p_norm or "botella" in p_norm):
                         respuesta_chat = f"""
 ### 🛠️ Guía Técnica de Resolución: Atascos en Rodillos y Transporte
-Ante un atasco de cajas, envases o bandejas en la sección de rodillos o transporte de la **{linea_sel}**, ejecuta de inmediato la siguiente serie de pasos correctivos y de seguridad:
+Ante un atasco de envases, cajas o bandejas en la sección de transporte de la **{linea_sel}**, ejecuta de inmediato los siguientes pasos:
 
 1. **Aislamiento y Seguridad (LOTOTO / SAM):**
-   - Detén la sección afectada mediante el botón de paro de emergencia y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de intervenir mecánicamente.
+   - Detén la sección afectada y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de intervenir mecánicamente la zona.
 
 2. **Inspección Física y Retirada de Obstáculos:**
-   - Retira de manera manual y cuidadosa la caja, tarima o envases atascados. Inspecciona si existen fragmentos de cartón, etiquetas sueltas o esquirlas de vidrio que estén frenando el giro de los rodillos.
+   - Retira de manera manual y cuidadosa el material atascado. Inspecciona si existen fragmentos de cartón, etiquetas sueltas o esquirlas de vidrio frenando el giro de los rodillos.
 
-3. **Verificación de Transmisión y Rodillos Locos:**
-   - Comprueba que los rodillos afectados giren libremente de forma individual. Revisa el estado de las bandas o cadenas de transmisión laterales, asegurándote de que no se hayan salido de sus catenarias.
+3. **Verificación de Transmisión:**
+   - Comprueba que los rodillos giren libremente de forma individual y revisa el estado de las bandas o cadenas de transmisión laterales.
 
-4. **Alineación de Guías y Sensores de Presencia:**
-   - Revisa que los barandales laterales no estén cerrados de más ejerciendo presión lateral excesiva, y limpia las celdas o sensores fotoeléctricos que detectan el flujo para evitar falsos bloqueos.
+4. **Alineación de Guías y Sensores:**
+   - Revisa que los barandales laterales no ejerzan presión excesiva sobre los envases, y limpia las celdas o sensores fotoeléctricos para evitar falsos bloqueos.
 
 5. **Prueba Operativa y Liberación:**
-   - Retira el personal y las herramientas de la zona de riesgo, desactiva los bloqueos de seguridad y realiza una prueba en vacío (*dry run*) antes de reanudar la operación con Calidad.
+   - Retira herramientas, desactiva bloqueos y realiza una prueba en vacío (*dry run*) antes de reanudación con Calidad.
 """
-                    elif "sensor" in p_norm:
+                    elif "sensor" in p_norm or "celda" in p_norm or "detectar" in p_norm:
                         respuesta_chat = f"""
 ### 🔍 Guía Técnica Experta: Verificación de Sensores de Posición
-Para comprobar si un sensor de posición funciona adecuadamente, realiza los siguientes pasos:
+Para comprobar si un sensor de posición o celda fotoeléctrica funciona adecuadamente, realiza los siguientes pasos:
 1. **Medición de Tensión:** Comprueba con multímetro que lleguen estables los **24V DC** de alimentación.
 2. **Respuesta de LED:** Verifica que los indicadores luminosos de encendido y conmutación respondan al paso del objeto.
 3. **Prueba de Salida:** Mide el voltaje en el pin de señal al momento de la detección y revisa la continuidad del cableado M12.
 4. **Estado en HMI/PLC:** Confirma en la interfaz de control de la línea que el bit de entrada digital conmute correctamente de 0 a 1.
 """
+                    elif "vidrio" in p_norm or "botella" in p_norm or "rotura" in p_norm:
+                        respuesta_chat = f"""
+### 🟢 Guía Técnica Experta: Manejo y Control de Envases de Vidrio
+Para mantener la eficiencia y evitar roturas o incidentes de calidad en la zona de envasado:
+1. **Control de Presiones:** Evita acumulaciones excesivas en mesas y tramos rectos para prevenir microfisuras y explosiones de envases.
+2. **Velocidades Sincronizadas:** Asegura una transición fluida entre tramos consecutivos sin tirones bruscos.
+3. **Inspección de RSU:** Realiza rondas visuales constantes para retirar fragmentos de vidrio o etiquetas que obstaculicen el flujo.
+"""
                     else:
+                        # ANÁLISIS ABIERTO INTELIGENTE MEDIANTE RAG Y SOPORTE EXPERTO
                         fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
                         if fragmentos:
                             f_ref = fragmentos[0]
@@ -909,22 +936,28 @@ Para comprobar si un sensor de posición funciona adecuadamente, realiza los sig
                             
                             respuesta_chat = f"""
 ### ⚙️ Análisis Técnico Especializado (VPO)
-Sobre tu consulta (*"{prompt_chat}"*), la revisión en los registros y manuales oficiales (**{archivo_origen} | Pág. {pagina_origen}**) indica lo siguiente:
+Sobre tu consulta (*"{prompt_chat}"*), la revisión en los registros y manuales oficiales (**{archivo_origen} | Pág. {pagina_origen}**) arroja el siguiente contexto operativo:
 
 > {texto_limpio}
 
-**Pasos de Seguimiento Recomendados:**
-1. **Verificación Operativa:** Comprueba tolerancias y estado de los componentes asociados en el área de trabajo.
+**Criterios y Pasos Recomendados de Ingeniería:**
+1. **Verificación de Parámetros:** Inspecciona las tolerancias, ajustes mecánicos y estado de los componentes relacionados en la **{area_sel}**.
 2. **Seguridad Industrial:** Aplica rigurosamente las directrices de aislamiento de energía (**LOTOTO / SAM**).
-3. **Liberación:** Efectúa pruebas controladas y valida con el departamento de Calidad.
+3. **Validación de Calidad:** Efectúa pruebas controladas antes de liberar la producción en serie.
+
+---
+*💡 ¿Deseas que profundicemos en algún aspecto específico de este procedimiento?*
 """
                         else:
                             respuesta_chat = f"""
-### ⚙️ Dictamen Técnico (Excelencia Operativa VPO)
-En relación a tu pregunta sobre *"{prompt_chat}"*, te sugiero seguir este procedimiento estructurado:
-1. **Inspección Física:** Revisa el estado mecánico, conexiones eléctricas y posibles obstrucciones en el área.
-2. **Mantenimiento Preventivo (TPM):** Asegura la limpieza y verificación de parámetros operativos.
-3. **Pruebas y Validación:** Ejecuta ciclos controlados antes de reanudar la producción.
+### ⚙️ Dictamen Técnico Experto (Excelencia Operativa VPO)
+En respuesta a tu duda sobre *"{prompt_chat}"*, te propongo analizar y resolver la situación bajo este enfoque estructurado:
+1. **Diagnóstico y Localización:** Inspecciona visual y térmicamente los componentes asociados en el área de **{area_sel}** para aislar la causa raíz.
+2. **Acción Correctiva (TPM):** Aplica limpieza, reapriete, calibración o lubricación según corresponda al tipo de anomalía detectada.
+3. **Pruebas y Liberación:** Ejecuta ciclos controlados en vacío y valida el funcionamiento óptimo antes de liberar el equipo con el departamento de Calidad.
+
+---
+*💡 ¿Qué datos adicionales o síntomas presenta el equipo para refinar el diagnóstico técnico?*
 """
                 
                 st.markdown(respuesta_chat)
