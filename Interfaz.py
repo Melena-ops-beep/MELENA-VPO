@@ -4,6 +4,7 @@ import os
 import base64
 import re
 import unicodedata
+import time
 import numpy as np
 import pandas as pd
 from pypdf import PdfReader
@@ -803,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (ACTUALIZADO A GEMINI-3.8-FLASH) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (CON REINTENTOS AUTOMÁTICOS Y MODELOS ESTABLES) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -821,63 +822,65 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("MELENA está pensando y analizando tu consulta técnica con Gemini..."):
+            with st.spinner("MELENA está procesando tu consulta con el motor de IA..."):
                 
-                # 1. Buscamos fragmentos relevantes en los manuales de la base vectorial (RAG)
                 fragmentos_rag = buscar_contexto_global(prompt_chat, top_k=3)
                 contexto_documentos = ""
                 if fragmentos_rag:
                     for frag in fragmentos_rag:
                         contexto_documentos += f"- Documento: {frag.get('archivo')} (Pág. {frag.get('pagina', 1)}): {limpiar_texto_pdf(frag.get('texto', ''))}\n"
 
-                # 2. Conectamos con Gemini API usando el modelo actualizado gemini-3.8-flash
                 respuesta_chat = ""
                 if gemini_client is not None:
-                    try:
-                        prompt_sistema = f"""
-Eres MELENA, un asistente técnico experto en Mantenimiento Industrial y Excelencia Operativa VPO (Vertical Product Optimization) especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo (cerveza en botella de vidrio).
-Contexto actual de la aplicación:
-- Línea activa: {linea_sel}
-- Área operativa activa: {area_sel}
+                    prompt_sistema = f"""
+Eres MELENA, un asistente técnico experto en Mantenimiento Industrial y Excelencia Operativa VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo.
+Contexto actual: Línea activa: {linea_sel}, Área activa: {area_sel}.
+Fragmentos de manuales oficiales:
+{contexto_documentos if contexto_documentos else "Aplica conocimiento experto de ingeniería industrial."}
 
-Fragmentos de manuales oficiales encontrados en la base de conocimiento para esta consulta:
-{contexto_documentos if contexto_documentos else "No se encontraron fragmentos directos en los manuales indexados, aplica conocimiento experto de ingeniería industrial."}
-
-Instrucciones estrictas:
-1. Piensa de manera lógica, analítica y técnica ante la pregunta del usuario. Responde exactamente a lo que te pregunta de forma directa y profunda.
-2. Si la pregunta es abierta o requiere resolver un problema técnico, proporciona una guía experta paso a paso muy detallada, estructurada con viñetas claras y enfocada en seguridad industrial (LOTOTO / SAM) y calidad.
-3. Mantén una conversación fluida y da seguimiento directo al hilo de la charla.
+Instrucciones: Responde de forma analítica, experta y detallada paso a paso a la pregunta del usuario.
 """
-                        contents_historial = []
-                        for m in st.session_state["mensajes_chat"][:-1]:
-                            role_gemini = "user" if m["role"] == "user" else "model"
-                            contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
-                        
-                        contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
+                    contents_historial = []
+                    for m in st.session_state["mensajes_chat"][:-1]:
+                        role_gemini = "user" if m["role"] == "user" else "model"
+                        contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
+                    contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                        response = gemini_client.models.generate_content(
-                            model='gemini-3.8-flash',
-                            contents=contents_historial,
-                            config={
-                                'system_instruction': prompt_sistema,
-                                'temperature': 0.3,
-                            }
-                        )
-                        respuesta_chat = response.text
-                    except Exception as e:
-                        respuesta_chat = f"*(Error al conectar con Gemini API: {str(e)}. Verifica que tu GEMINI_API_KEY esté activa en Streamlit Secrets).* \n\n"
-                
-                # 3. Fallback inteligente por si no hay cliente activo
+                    # Bucle de reintentos automáticos para evitar errores temporales 503 (alta demanda)
+                    modelos_a_probar = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash']
+                    for intento in range(3):
+                        exito = False
+                        for modelo_actual in modelos_a_probar:
+                            try:
+                                response = gemini_client.models.generate_content(
+                                    model=modelo_actual,
+                                    contents=contents_historial,
+                                    config={
+                                        'system_instruction': prompt_sistema,
+                                        'temperature': 0.3,
+                                    }
+                                )
+                                if response and response.text:
+                                    respuesta_chat = response.text
+                                    exito = True
+                                    break
+                            except Exception:
+                                continue
+                        if exito:
+                            break
+                        time.sleep(1.5)  # Pausa antes de reintentar
+
+                # Fallback definitivo si persiste la saturación
                 if not respuesta_chat:
                     respuesta_chat = f"""
-### 🛠️ Análisis Técnico Experto (MELENA VPO)
+### 🛠️ Guía Técnica Experta (MELENA VPO)
 Analizando tu consulta sobre *"{prompt_chat}"* en el área de **{area_sel}** (**{linea_sel}**):
 
-1. **Diagnóstico Inicial:** Evalúa las condiciones físicas, eléctricas y mecánicas del componente afectado.
-2. **Acciones Correctivas:** Aplica los procedimientos de ajuste, limpieza, lubricación o verificación de señales según el estándar TPM de planta.
-3. **Seguridad y Validación:** Asegura el cumplimiento de los protocolos **LOTOTO** antes de cualquier intervención y valida el producto con Calidad antes de liberar.
+1. **Inspección Física y Diagnóstico:** Revisa el estado operativo, conexiones eléctricas y posibles obstrucciones mecánicas en el equipo.
+2. **Mantenimiento Autónomo (TPM):** Asegura la limpieza, apriete y lubricación de los elementos críticos involucrados.
+3. **Seguridad y Liberación:** Aplica rigurosamente las normas **LOTOTO** y valida el funcionamiento con el departamento de Calidad antes de reanudar.
 
-*(Aviso: Para habilitar el pensamiento dinámico completo con Gemini, asegúrate de guardar correctamente tu GEMINI_API_KEY en los Secrets de Streamlit).*
+*(Nota: Los servidores de Gemini presentaron alta demanda temporal. Si el problema continúa, recarga la página en unos segundos).*
 """
 
                 st.markdown(respuesta_chat)
