@@ -803,7 +803,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (PENSAMIENTO Y RAZONAMIENTO REAL) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (ACTUALIZADO A GEMINI-3.8-FLASH) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -830,7 +830,7 @@ elif st.session_state.tab_activa == "chat":
                     for frag in fragmentos_rag:
                         contexto_documentos += f"- Documento: {frag.get('archivo')} (Pág. {frag.get('pagina', 1)}): {limpiar_texto_pdf(frag.get('texto', ''))}\n"
 
-                # 2. Conectamos con Gemini API para que piense y razone de verdad
+                # 2. Conectamos con Gemini API usando el modelo actualizado gemini-3.8-flash
                 respuesta_chat = ""
                 if gemini_client is not None:
                     try:
@@ -856,7 +856,7 @@ Instrucciones estrictas:
                         contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
                         response = gemini_client.models.generate_content(
-                            model='gemini-2.5-flash',
+                            model='gemini-3.8-flash',
                             contents=contents_historial,
                             config={
                                 'system_instruction': prompt_sistema,
