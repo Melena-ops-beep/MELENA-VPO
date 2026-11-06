@@ -10,6 +10,7 @@ from pypdf import PdfReader
 import chromadb
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
 from sentence_transformers import SentenceTransformer
+from google import genai
 
 # --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,7 +18,16 @@ IMG_DIR = os.path.join(BASE_DIR, "img")
 DATA_DIR = os.path.join(BASE_DIR, "CONOCIMIENTO_VPO")
 DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
 INDICE_DIR = os.path.join(BASE_DIR, "INDICE_VECTORIAL")
-MODELO_CHAT = "phi3"
+
+# --- CONFIGURACIÓN DE GEMINI API ---
+# Nota: Asegúrate de configurar tu API Key en los Secrets de Streamlit o variable de entorno como GEMINI_API_KEY
+gemini_client = None
+try:
+    api_key_str = os.environ.get("GEMINI_API_KEY") or (st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None)
+    if api_key_str:
+        gemini_client = genai.Client(api_key=api_key_str)
+except Exception:
+    pass
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
@@ -569,7 +579,7 @@ with st.sidebar:
     if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
         with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
             archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} archivo(s), {chunks} fragmento(s).")
+        st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
 
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
@@ -826,7 +836,7 @@ elif st.session_state.tab_activa == "preguntas":
                         titulos_tabs = [f"{e['archivo']}" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
                         for idx, tab in enumerate(tabs):
-                            e = evidencias[idx]
+                            e = evidencias_calc[idx] if 'evidencias_calc' in locals() and idx < len(evidencias_calc) else evidencias[idx]
                             with tab:
                                 if e["pdf_path"].lower().endswith(".pdf"):
                                     img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
@@ -836,7 +846,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA SEGUIMIENTO DE AVERÍAS (MOTOR DE PENSAMIENTO Y ANÁLISIS DINÁMICO) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (PENSAMIENTO Y RAZONAMIENTO REAL) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -854,112 +864,66 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("Analizando consulta y pensando solución técnica experta..."):
-                p_norm = normalizar_texto(prompt_chat)
+            with st.spinner("MELENA está pensando y analizando tu consulta técnica..."):
                 
-                es_conversacional = any(kw in p_norm for kw in [
-                    "que sabes hacer", "ayuda", "hola", "quien eres", "buenos dias", 
-                    "buenas tardes", "que tal", "como estas", "gracias", "saludos", "ok"
-                ])
+                # 1. Buscamos fragmentos relevantes en los manuales de la base vectorial (RAG)
+                fragmentos_rag = buscar_contexto_global(prompt_chat, top_k=3)
+                contexto_documentos = ""
+                if fragmentos_rag:
+                    for frag in fragmentos_rag:
+                        contexto_documentos += f"- Documento: {frag.get('archivo')} (Pág. {frag.get('pagina', 1)}): {limpiar_texto_pdf(frag.get('texto', ''))}\n"
 
-                if es_conversacional:
-                    if "que sabes hacer" in p_norm or "ayuda" in p_norm:
-                        respuesta_chat = "¡Hola! Soy MELENA, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. Puedo ayudarte a consultar manuales, procesar PDFs y Excel, generar planes de acción y guiarte paso a paso en tus dudas técnicas."
-                    elif any(saludo in p_norm for saludo in ["hola", "buenos dias", "buenas tardes", "que tal", "como estas"]):
-                        respuesta_chat = "¡Hola! ¿Qué avería, procedimiento o duda técnica deseas consultar hoy en la planta de envasado?"
-                    else:
-                        respuesta_chat = "Entendido. Sigo a tu disposición para cualquier consulta de ingeniería, mantenimiento o calidad bajo los estándares VPO de Grupo Modelo."
-                else:
-                    # MOTOR INTELIGENTE DE ANÁLISIS DINÁMICO SEGÚN EL TEMA DE LA PREGUNTA
-                    if "rechinamiento" in p_norm or "chirrido" in p_norm or "ruido" in p_norm or "friccion" in p_norm:
-                        respuesta_chat = f"""
-### 🟢 Guía Técnica Experta: Solución ante Rechinamientos y Ruidos Mecánicos
-Ante un problema de rechinamiento o fricción anómala en los elementos mecánicos de la **{linea_sel}**, te sugiero aplicar el siguiente procedimiento estructurado de diagnóstico:
+                # 2. Si tenemos la API Key de Gemini configurada, dejamos que la IA piense de verdad
+                respuesta_chat = ""
+                if gemini_client is not None:
+                    try:
+                        prompt_sistema = f"""
+Eres MELENA, un asistente técnico experto en Mantenimiento Industrial y Excelencia Operativa VPO (Vertical Product Optimization) especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo (cerveza en botella de vidrio).
+Contexto actual de la aplicación:
+- Línea activa: {linea_sel}
+- Área operativa activa: {area_sel}
 
-1. **Localización Auditiva y Térmica del Foco:**
-   - Emplea un bastón de escucha o una cámara termográfica para ubicar con precisión el punto exacto donde se genera la fricción (chumaceras, rodamientos, guías o cadenas). Una temperatura elevada en el soporte confirma el punto de fallo inminente.
+Fragmentos de manuales oficiales encontrados en la base de conocimiento para esta consulta:
+{contexto_documentos if contexto_documentos else "No se encontraron fragmentos directos en los manuales indexados, aplica conocimiento experto de ingeniería industrial."}
 
-2. **Inspección del Sistema de Lubricación:**
-   - Verifica que los puntos de engrase o sistemas automáticos de lubricación estén suministrando el insumo correcto. Confirma que se esté utilizando grasa o aceite grado alimentario autorizado (ej. CASSIDA / CELEROL) según las especificaciones del fabricante.
-
-3. **Revisión de Alineación y Tolerancias:**
-   - Comprueba la alineación de flechas, poleas, chumaceras y barandales de transporte. Un desalineamiento angular o axial genera cargas laterales excesivas que provocan rechinamientos y desgaste prematuro.
-
-4. **Estado de Rodamientos y Sellos:**
-   - Si el rechinamiento persiste tras lubricar, es muy probable que exista un rodamiento con fatiga interna, daño en pistas o contaminación por humedad. Programar su sustitución bajo protocolo de mantenimiento preventivo.
+Instrucciones:
+1. Piensa de manera lógica, analítica y técnica ante la pregunta del usuario.
+2. Si la pregunta es abierta o requiere resolver un problema (como ruidos, atascos, fallas de sensores, etc.), proporciona una guía experta paso a paso muy detallada, estructurada con viñetas claras y enfocada en seguridad industrial (LOTOTO / SAM) y calidad.
+3. Mantén una conversación fluida y da seguimiento directo a lo que el usuario pregunte.
 """
-                    elif "atasco" in p_norm and ("rodillo" in p_norm or "transporte" in p_norm or "caja" in p_norm or "botella" in p_norm):
-                        respuesta_chat = f"""
-### 🛠️ Guía Técnica de Resolución: Atascos en Rodillos y Transporte
-Ante un atasco de envases, cajas o bandejas en la sección de transporte de la **{linea_sel}**, ejecuta de inmediato los siguientes pasos:
+                        # Construir historial para Gemini
+                        contents_historial = []
+                        for m in st.session_state["mensajes_chat"][:-1]:
+                            role_gemini = "user" if m["role"] == "user" else "model"
+                            contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
+                        
+                        contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-1. **Aislamiento y Seguridad (LOTOTO / SAM):**
-   - Detén la sección afectada y aplica el bloqueo de energías peligrosas (neumática y eléctrica) antes de intervenir mecánicamente la zona.
-
-2. **Inspección Física y Retirada de Obstáculos:**
-   - Retira de manera manual y cuidadosa el material atascado. Inspecciona si existen fragmentos de cartón, etiquetas sueltas o esquirlas de vidrio frenando el giro de los rodillos.
-
-3. **Verificación de Transmisión:**
-   - Comprueba que los rodillos giren libremente de forma individual y revisa el estado de las bandas o cadenas de transmisión laterales.
-
-4. **Alineación de Guías y Sensores:**
-   - Revisa que los barandales laterales no ejerzan presión excesiva sobre los envases, y limpia las celdas o sensores fotoeléctricos para evitar falsos bloqueos.
-
-5. **Prueba Operativa y Liberación:**
-   - Retira herramientas, desactiva bloqueos y realiza una prueba en vacío (*dry run*) antes de reanudación con Calidad.
-"""
-                    elif "sensor" in p_norm or "celda" in p_norm or "detectar" in p_norm:
-                        respuesta_chat = f"""
-### 🔍 Guía Técnica Experta: Verificación de Sensores de Posición
-Para comprobar si un sensor de posición o celda fotoeléctrica funciona adecuadamente, realiza los siguientes pasos:
-1. **Medición de Tensión:** Comprueba con multímetro que lleguen estables los **24V DC** de alimentación.
-2. **Respuesta de LED:** Verifica que los indicadores luminosos de encendido y conmutación respondan al paso del objeto.
-3. **Prueba de Salida:** Mide el voltaje en el pin de señal al momento de la detección y revisa la continuidad del cableado M12.
-4. **Estado en HMI/PLC:** Confirma en la interfaz de control de la línea que el bit de entrada digital conmute correctamente de 0 a 1.
-"""
-                    elif "vidrio" in p_norm or "botella" in p_norm or "rotura" in p_norm:
-                        respuesta_chat = f"""
-### 🟢 Guía Técnica Experta: Manejo y Control de Envases de Vidrio
-Para mantener la eficiencia y evitar roturas o incidentes de calidad en la zona de envasado:
-1. **Control de Presiones:** Evita acumulaciones excesivas en mesas y tramos rectos para prevenir microfisuras y explosiones de envases.
-2. **Velocidades Sincronizadas:** Asegura una transición fluida entre tramos consecutivos sin tirones bruscos.
-3. **Inspección de RSU:** Realiza rondas visuales constantes para retirar fragmentos de vidrio o etiquetas que obstaculicen el flujo.
-"""
-                    else:
-                        # ANÁLISIS ABIERTO INTELIGENTE MEDIANTE RAG Y SOPORTE EXPERTO
-                        fragmentos = buscar_contexto_global(prompt_chat, top_k=2)
-                        if fragmentos:
-                            f_ref = fragmentos[0]
-                            texto_limpio = limpiar_texto_pdf(f_ref.get('texto', ''))
-                            archivo_origen = f_ref.get('archivo', 'Documento')
-                            pagina_origen = f_ref.get('pagina', 1)
-                            
-                            respuesta_chat = f"""
-### ⚙️ Análisis Técnico Especializado (VPO)
-Sobre tu consulta (*"{prompt_chat}"*), la revisión en los registros y manuales oficiales (**{archivo_origen} | Pág. {pagina_origen}**) arroja el siguiente contexto operativo:
-
-> {texto_limpio}
-
-**Criterios y Pasos Recomendados de Ingeniería:**
-1. **Verificación de Parámetros:** Inspecciona las tolerancias, ajustes mecánicos y estado de los componentes relacionados en la **{area_sel}**.
-2. **Seguridad Industrial:** Aplica rigurosamente las directrices de aislamiento de energía (**LOTOTO / SAM**).
-3. **Validación de Calidad:** Efectúa pruebas controladas antes de liberar la producción en serie.
-
----
-*💡 ¿Deseas que profundicemos en algún aspecto específico de este procedimiento?*
-"""
-                        else:
-                            respuesta_chat = f"""
-### ⚙️ Dictamen Técnico Experto (Excelencia Operativa VPO)
-En respuesta a tu duda sobre *"{prompt_chat}"*, te propongo analizar y resolver la situación bajo este enfoque estructurado:
-1. **Diagnóstico y Localización:** Inspecciona visual y térmicamente los componentes asociados en el área de **{area_sel}** para aislar la causa raíz.
-2. **Acción Correctiva (TPM):** Aplica limpieza, reapriete, calibración o lubricación según corresponda al tipo de anomalía detectada.
-3. **Pruebas y Liberación:** Ejecuta ciclos controlados en vacío y valida el funcionamiento óptimo antes de liberar el equipo con el departamento de Calidad.
-
----
-*💡 ¿Qué datos adicionales o síntomas presenta el equipo para refinar el diagnóstico técnico?*
-"""
+                        response = gemini_client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=contents_historial,
+                            config={
+                                'system_instruction': prompt_sistema,
+                                'temperature': 0.3,
+                            }
+                        )
+                        respuesta_chat = response.text
+                    except Exception as e:
+                        respuesta_chat = f"*(Aviso: No se pudo conectar con el motor de Gemini API en este momento. Error: {str(e)})*\n\n"
                 
+                # 3. Fallback inteligente si no hay API Key configurada
+                if not respuesta_chat:
+                    respuesta_chat = f"""
+### 🛠️ Análisis Técnico Experto (MELENA VPO)
+Analizando tu consulta sobre *"{prompt_chat}"* en el área de **{area_sel}** (**{linea_sel}**):
+
+1. **Diagnóstico Inicial:** Evalúa las condiciones físicas, eléctricas y mecánicas del componente afectado.
+2. **Acciones Correctivas:** Aplica los procedimientos de ajuste, limpieza, lubricación o verificación de señales según el estándar TPM de planta.
+3. **Seguridad y Validación:** Asegura el cumplimiento de los protocolos **LOTOTO** antes de cualquier intervención y valida el producto con Calidad antes de liberar.
+
+*(Para activar el pensamiento dinámico completo con Gemini API, asegúrate de configurar tu GEMINI_API_KEY en Streamlit Secrets).*
+"""
+
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
