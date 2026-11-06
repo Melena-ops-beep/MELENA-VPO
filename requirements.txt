@@ -12,3 +12,4 @@ torch
 opencv-python-headless
 PyMuPDF
 sentence-transformers
+google-genai
