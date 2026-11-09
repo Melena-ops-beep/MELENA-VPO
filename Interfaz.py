@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (FORZANDO RAZONAMIENTO REAL) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO OFICIAL 3.8-FLASH) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -849,25 +849,20 @@ Instrucciones estrictas:
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Bucle con modelos estables y captura de error real si ocurre
-                    modelos_a_probar = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-                    for modelo_actual in modelos_a_probar:
-                        try:
-                            response = gemini_client.models.generate_content(
-                                model=modelo_actual,
-                                contents=contents_historial,
-                                config={
-                                    'system_instruction': prompt_sistema,
-                                    'temperature': 0.3,
-                                }
-                            )
-                            if response and response.text:
-                                respuesta_chat = response.text
-                                break
-                        except Exception as e:
-                            # Si falla un modelo, probamos el siguiente; guardamos el error por si todos fallan
-                            respuesta_chat = f"*(Error de conexión con Gemini API: {str(e)})*"
-                            continue
+                    # Uso del modelo estable actual gemini-3.8-flash
+                    try:
+                        response = gemini_client.models.generate_content(
+                            model='gemini-3.8-flash',
+                            contents=contents_historial,
+                            config={
+                                'system_instruction': prompt_sistema,
+                                'temperature': 0.3,
+                            }
+                        )
+                        if response and response.text:
+                            respuesta_chat = response.text
+                    except Exception as e:
+                        respuesta_chat = f"*(Error de conexión con Gemini API: {str(e)})*"
                 else:
                     respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica que tu GEMINI_API_KEY esté correctamente configurada en los Secrets de Streamlit).* "
 
