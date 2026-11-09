@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO ULTRA-RÁPIDO GEMINI-2.0-FLASH) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO ESTABLE OFICIAL 3.8-FLASH) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -846,10 +846,10 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Llamada directa al modelo ultrarrápido y estable gemini-2.0-flash para velocidad óptima (2-3 segundos)
+                    # Llamada directa al modelo oficial gemini-3.8-flash para velocidad y compatibilidad óptima
                     try:
                         response = gemini_client.models.generate_content(
-                            model='gemini-2.0-flash',
+                            model='gemini-3.8-flash',
                             contents=contents_historial,
                             config={
                                 'system_instruction': prompt_sistema,
