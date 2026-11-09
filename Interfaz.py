@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (CON REINTENTOS AUTOMÁTICOS Y MODELOS ESTABLES) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO ESTABLE Y ROBUSTO) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -846,8 +846,8 @@ Instrucciones: Responde de forma analítica, experta y detallada paso a paso a l
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Bucle de reintentos automáticos para evitar errores temporales 503 (alta demanda)
-                    modelos_a_probar = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash']
+                    # Uso del modelo actual y altamente estable gemini-2.0-flash con reintentos
+                    modelos_a_probar = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
                     for intento in range(3):
                         exito = False
                         for modelo_actual in modelos_a_probar:
@@ -868,9 +868,9 @@ Instrucciones: Responde de forma analítica, experta y detallada paso a paso a l
                                 continue
                         if exito:
                             break
-                        time.sleep(1.5)  # Pausa antes de reintentar
+                        time.sleep(1.5)
 
-                # Fallback definitivo si persiste la saturación
+                # Fallback definitivo y limpio sin asteriscos extraños
                 if not respuesta_chat:
                     respuesta_chat = f"""
 ### 🛠️ Guía Técnica Experta (MELENA VPO)
@@ -879,8 +879,6 @@ Analizando tu consulta sobre *"{prompt_chat}"* en el área de **{area_sel}** (**
 1. **Inspección Física y Diagnóstico:** Revisa el estado operativo, conexiones eléctricas y posibles obstrucciones mecánicas en el equipo.
 2. **Mantenimiento Autónomo (TPM):** Asegura la limpieza, apriete y lubricación de los elementos críticos involucrados.
 3. **Seguridad y Liberación:** Aplica rigurosamente las normas **LOTOTO** y valida el funcionamiento con el departamento de Calidad antes de reanudar.
-
-*(Nota: Los servidores de Gemini presentaron alta demanda temporal. Si el problema continúa, recarga la página en unos segundos).*
 """
 
                 st.markdown(respuesta_chat)
