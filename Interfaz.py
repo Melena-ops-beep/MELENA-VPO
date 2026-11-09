@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO OFICIAL 3.8-FLASH) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO ULTRA-RÁPIDO GEMINI-2.0-FLASH) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -822,7 +822,7 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("MELENA está pensando y generando razonamiento experto con Gemini..."):
+            with st.spinner("MELENA está analizando tu consulta..."):
                 
                 fragmentos_rag = buscar_contexto_global(prompt_chat, top_k=3)
                 contexto_documentos = ""
@@ -836,12 +836,9 @@ elif st.session_state.tab_activa == "chat":
 Eres MELENA, un asistente técnico experto en Automatización, Mecatrónica y Mantenimiento Industrial, especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo.
 Contexto actual: Línea activa: {linea_sel}, Área activa: {area_sel}.
 Fragmentos de manuales oficiales disponibles:
-{contexto_documentos if contexto_documentos else "Aplica conocimiento experto en ingeniería mecatrónica y automatización industrial (PLC, sensores, fuentes, etc.)."}
+{contexto_documentos if contexto_documentos else "Aplica conocimiento experto en ingeniería mecatrónica y automatización industrial."}
 
-Instrucciones estrictas:
-1. Piensa de manera lógica, analítica y técnica ante la pregunta del usuario. Responde exactamente a lo que te pregunta de forma directa, técnica y profunda.
-2. Si el usuario pregunta por especificaciones de equipos (como fuentes de alimentación para PLC Siemens S7-1200, sensores, motores, etc.), detalla los voltajes, potencias, requerimientos de corriente, protecciones y normativas aplicadas.
-3. Estructura tu respuesta con viñetas claras y un tono profesional de ingeniería industrial.
+Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directamente a lo que se te pregunta con una guía experta paso a paso estructurada con viñetas claras.
 """
                     contents_historial = []
                     for m in st.session_state["mensajes_chat"][:-1]:
@@ -849,10 +846,10 @@ Instrucciones estrictas:
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Uso del modelo estable actual gemini-3.8-flash
+                    # Llamada directa al modelo ultrarrápido y estable gemini-2.0-flash para velocidad óptima (2-3 segundos)
                     try:
                         response = gemini_client.models.generate_content(
-                            model='gemini-3.8-flash',
+                            model='gemini-2.0-flash',
                             contents=contents_historial,
                             config={
                                 'system_instruction': prompt_sistema,
