@@ -343,6 +343,53 @@ def indexar_todos_los_documentos():
                                 
     return total_archivos, total_chunks
 
+def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=4, permitir_fallback=True):
+    coleccion = obtener_coleccion_vectorial()
+    if coleccion.count() == 0: return []
+    
+    embedding_pregunta = obtener_embedding(pregunta)
+    where_filter = {}
+    if linea and area:
+        where_filter = {"$and": [{"linea": linea}, {"area": area}]}
+    elif linea:
+        where_filter = {"linea": linea}
+    elif area:
+        where_filter = {"area": area}
+        
+    try:
+        if where_filter:
+            resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k, where=where_filter)
+        else:
+            resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k)
+    except Exception:
+        resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k)
+        
+    fragmentos = []
+    if resultados and resultados.get('documents') and resultados['documents'][0]:
+        for doc, meta in zip(resultados['documents'][0], resultados['metadatas'][0]):
+            if archivo and meta.get('archivo', '').lower() != archivo.lower():
+                continue
+            fragmentos.append({
+                "texto": doc, 
+                "archivo": meta.get('archivo'), 
+                "tipo": meta.get('tipo'), 
+                "ruta_pdf": meta.get('ruta_pdf'),
+                "pagina": meta.get('pagina')
+            })
+            
+    if not fragmentos and permitir_fallback:
+        resultados_globales = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k)
+        if resultados_globales and resultados_globales.get('documents') and resultados_globales['documents'][0]:
+            for doc, meta in zip(resultados_globales['documents'][0], resultados_globales['metadatas'][0]):
+                fragmentos.append({
+                    "texto": doc, 
+                    "archivo": meta.get('archivo'), 
+                    "tipo": meta.get('tipo'), 
+                    "ruta_pdf": meta.get('ruta_pdf'),
+                    "pagina": meta.get('pagina')
+                })
+    return fragmentos
+
 def buscar_contexto_global(pregunta, top_k=3):
     coleccion = obtener_coleccion_vectorial()
     if coleccion.count() == 0: return []
@@ -846,7 +893,6 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Cascada de modelos para máxima velocidad y evitar caídas 503
                     modelos_disponibles = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
                     for modelo_actual in modelos_disponibles:
                         try:
@@ -902,7 +948,6 @@ elif st.session_state.tab_activa == "subir":
                 
                 version_previa_existe = os.path.exists(ruta_completa_archivo)
                 
-                # Guarda o sobrescribe el archivo anterior si tiene el mismo nombre
                 with open(ruta_completa_archivo, "wb") as f:
                     f.write(archivo_subido.getbuffer())
                 
