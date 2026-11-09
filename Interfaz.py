@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (MODELO ESTABLE OFICIAL 3.8-FLASH) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (SISTEMA DE RESPALDO EN CASCADA PARA EVITAR 503) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -822,7 +822,7 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("MELENA está analizando tu consulta..."):
+            with st.spinner("MELENA está analizando tu consulta con respaldo automático..."):
                 
                 fragmentos_rag = buscar_contexto_global(prompt_chat, top_k=3)
                 contexto_documentos = ""
@@ -846,20 +846,26 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Llamada directa al modelo oficial gemini-3.8-flash para velocidad y compatibilidad óptima
-                    try:
-                        response = gemini_client.models.generate_content(
-                            model='gemini-3.8-flash',
-                            contents=contents_historial,
-                            config={
-                                'system_instruction': prompt_sistema,
-                                'temperature': 0.3,
-                            }
-                        )
-                        if response and response.text:
-                            respuesta_chat = response.text
-                    except Exception as e:
-                        respuesta_chat = f"*(Error de conexión con Gemini API: {str(e)})*"
+                    # Cascada de modelos para evitar errores 503 (si uno está saturado, prueba el siguiente de inmediato)
+                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']
+                    for modelo_actual in modelos_disponibles:
+                        try:
+                            response = gemini_client.models.generate_content(
+                                model=modelo_actual,
+                                contents=contents_historial,
+                                config={
+                                    'system_instruction': prompt_sistema,
+                                    'temperature': 0.3,
+                                }
+                            )
+                            if response and response.text:
+                                respuesta_chat = response.text
+                                break
+                        except Exception:
+                            continue
+
+                    if not respuesta_chat:
+                        respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente en unos segundos).* "
                 else:
                     respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica que tu GEMINI_API_KEY esté correctamente configurada en los Secrets de Streamlit).* "
 
