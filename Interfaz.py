@@ -804,7 +804,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (SISTEMA DE RESPALDO EN CASCADA PARA EVITAR 503) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API (SISTEMA DE RESPALDO EN CASCADA) ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -822,7 +822,7 @@ elif st.session_state.tab_activa == "chat":
             st.markdown(prompt_chat)
 
         with st.chat_message("assistant", avatar=avatar_config):
-            with st.spinner("MELENA está analizando tu consulta con respaldo automático..."):
+            with st.spinner("MELENA está analizando tu consulta..."):
                 
                 fragmentos_rag = buscar_contexto_global(prompt_chat, top_k=3)
                 contexto_documentos = ""
@@ -846,8 +846,8 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    # Cascada de modelos para evitar errores 503 (si uno está saturado, prueba el siguiente de inmediato)
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']
+                    # Cascada de modelos para máxima velocidad y evitar caídas 503
+                    modelos_disponibles = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = gemini_client.models.generate_content(
@@ -865,16 +865,17 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                             continue
 
                     if not respuesta_chat:
-                        respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente en unos segundos).* "
+                        respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente).* "
                 else:
                     respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica que tu GEMINI_API_KEY esté correctamente configurada en los Secrets de Streamlit).* "
 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR UN DOCUMENTO ---
+# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO (VERSIÓN PERSISTENTE) ---
 elif st.session_state.tab_activa == "subir":
-    st.markdown("<h3>Subir Nuevo Documento a la Biblioteca (PDF o Excel)</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>Subir o Actualizar Documento en la Biblioteca</h3>", unsafe_allow_html=True)
+    st.caption("Si subes un archivo con el mismo nombre que uno existente, se sobrescribirá automáticamente como nueva versión.")
     
     col_up1, col_up2 = st.columns([1, 1], gap="large")
     
@@ -889,9 +890,9 @@ elif st.session_state.tab_activa == "subir":
 
     with col_up2:
         st.markdown("#### Carga de Archivo (PDF o XLSX)")
-        archivo_subido = st.file_uploader("Selecciona el archivo PDF o Excel de tu computadora:", type=["pdf", "xlsx"], key="file_uploader_vpo")
-        auto_index = st.checkbox("Actualizar automáticamente el índice vectorial al guardar", value=True)
-        btn_guardar_doc = st.button("GUARDAR Y PROCESAR DOCUMENTO", type="primary", use_container_width=True)
+        archivo_subido = st.file_uploader("Selecciona el archivo actualizado:", type=["pdf", "xlsx"], key="file_uploader_vpo")
+        auto_index = st.checkbox("Actualizar automáticamente el índice vectorial (ChromaDB)", value=True)
+        btn_guardar_doc = st.button("GUARDAR / ACTUALIZAR VERSIÓN", type="primary", use_container_width=True)
         
         if btn_guardar_doc:
             if archivo_subido is not None:
@@ -899,15 +900,21 @@ elif st.session_state.tab_activa == "subir":
                 os.makedirs(carpeta_destino, exist_ok=True)
                 ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
                 
+                version_previa_existe = os.path.exists(ruta_completa_archivo)
+                
+                # Guarda o sobrescribe el archivo anterior si tiene el mismo nombre
                 with open(ruta_completa_archivo, "wb") as f:
                     f.write(archivo_subido.getbuffer())
                 
-                st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
+                if version_previa_existe:
+                    st.success(f"Versión actualizada con éxito para el archivo **'{archivo_subido.name}'**.")
+                else:
+                    st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
                 
                 if auto_index:
-                    with st.spinner("Indexando nuevo documento/hoja de Excel en la base de datos ChromaDB..."):
+                    with st.spinner("Reindexando la base de datos vectorial con la nueva versión..."):
                         tot_arch, tot_chk = indexar_todos_los_documentos()
-                    st.success(f"Índice de IA actualizado. Total actual: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
+                    st.success(f"Índice actualizado correctamente. Total: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
             else:
                 st.error("Por favor selecciona un archivo PDF o Excel antes de presionar Guardar.")
 
