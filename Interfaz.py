@@ -652,54 +652,53 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de resolución paso a paso...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de resolución con Gemini...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
                     placeholder.info("Generando plan de resolución paso a paso...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
-                placeholder.empty()
+                contexto_documentos = ""
+                if fragmentos_pdf:
+                    for f in fragmentos_pdf:
+                        contexto_documentos += f"- Documento: {f.get('archivo')} (Pág. {f.get('pagina', 1)}): {limpiar_texto_pdf(f.get('texto', ''))}\n"
 
+                plan_generado_ia = ""
+                if gemini_client is not None:
+                    prompt_sistema = f"""
+Eres MELENA, un asistente técnico experto en Mantenimiento Industrial y Excelencia Operativa VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo.
+Contexto: Línea: {linea_sel}, Área: {area_sel}, Tipo: {tipo_falla_sel}, Incidencia: {desc}.
+Fragmentos de manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
+Instrucciones: Genera un plan de acción profesional paso a paso con casillas de verificación (- [ ] **Paso X:** ...) enfocado en seguridad industrial (LOTOTO/SAM), diagnóstico y calidad.
+"""
+                    # Lista de modelos estables actualizados para evitar 503
+                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-flash']
+                    for modelo_actual in modelos_disponibles:
+                        try:
+                            response = gemini_client.models.generate_content(
+                                model=modelo_actual,
+                                contents=[{"role": "user", "parts": [{"text": f"Genera el plan de reacción para: {desc}"}]}],
+                                config={
+                                    'system_instruction': prompt_sistema,
+                                    'temperature': 0.3,
+                                }
+                            )
+                            if response and response.text:
+                                plan_generado_ia = response.text
+                                break
+                        except Exception:
+                            continue
+
+                placeholder.empty()
                 st.success(f"Plan secuencial generado para {linea_sel.upper()} - {area_sel.upper()}")
 
-                p_norm = normalizar_texto(desc)
-                t_norm = normalizar_texto(tipo_falla_sel)
-
-                if "sensor" in p_norm or "sensores" in p_norm or "senal" in p_norm or "electrica" in t_norm:
-                    pasos_resolucion = f"""
-- [ ] **Paso 1: Diagnóstico visual y de seguridad.** Detener la máquina de forma segura, asegurar el área e inspeccionar físicamente el sensor en **{area_sel}** para descartar daños en la carcasa o el empaque.
-- [ ] **Paso 2: Comprobación de alimentación eléctrica.** Utilizar un multímetro para medir el voltaje en los bornes del sensor y verificar la presencia de los 24V DC estables de alimentación.
-- [ ] **Paso 3: Verificación de LED indicadores y óptica.** Activar el componente manualmente o pasar un objeto de prueba frente al lente; confirmar que el LED emisor/receptor responda adecuadamente y limpiar la suciedad o humedad acumulada en la óptica.
-- [ ] **Paso 4: Revisión de cableado y conectores.** Comprobar la firmeza y continuidad del conector M12, buscando cables trozados, terminales flojas o falsos contactos en las canaletas.
-- [ ] **Paso 5: Monitoreo en interfaz HMI / PLC.** Acceder al sistema de control de la **{linea_sel}** para comprobar si el bit o dirección de entrada digital cambia de estado al activarse el sensor.
-- [ ] **Paso 6: Pruebas y validación final.** Restablecer las protecciones, ejecutar un ciclo de prueba controlado y validar la correcta operación con el área de Calidad.
-"""
-                elif "motor" in p_norm or "atasco" in p_norm or "mecanica" in t_norm or "rodillos" in p_norm:
-                    pasos_resolucion = f"""
-- [ ] **Paso 1: Aplicación de paro seguro y LOTOTO.** Realizar el bloqueo de energías peligrosas y asegurar que el equipo en **{area_sel}** se encuentre totalmente desenergizado.
-- [ ] **Paso 2: Inspección de obstrucciones y atascos.** Retirar manualmente los envases trabados, fragmentos de vidrio, etiquetas o cualquier elemento extraño que bloquee el mecanismo.
-- [ ] **Paso 3: Revisión de elementos de transmisión.** Comprobar el estado de tensión y alineación de cadenas, bandas, chumaceras y engranajes, verificando que no existan piezas desgastadas.
-- [ ] **Paso 4: Verificación de tornillería y soportes.** Inspeccionar los pernos de fijación del motor, reductores y soportes estructurales para descartar holguras causadas por vibración.
-- [ ] **Paso 5: Pruebas de giro en vacío.** Liberar los frenos mecánicos de forma segura y realizar un movimiento manual para comprobar la suavidad y libertad de desplazamiento.
-- [ ] **Paso 6: Arranque controlado y liberación.** Retirar herramientas, desenergizar bloqueos, arrancar la línea en vacío y solicitar la supervisión de Calidad.
-"""
-                elif "lubricacion" in p_norm or "grasa" in p_norm or "aceite" in p_norm:
-                    pasos_resolucion = f"""
-- [ ] **Paso 1: Preparación y seguridad operativa.** Verificar los requerimientos de EPP y asegurar las condiciones seguras para intervenir los puntos de lubricación en **{area_sel}**.
-- [ ] **Paso 2: Limpieza previa de boquillas y chumaceras.** Remover el polvo, grasa vieja y contaminantes acumulados alrededor de las graseras o puntos de aplicación para evitar que ingresen al sistema.
-- [ ] **Paso 3: Selección del lubricante correcto.** Comprobar que el insumo a utilizar corresponda exactamente al grado alimentario autorizado (ej. CASSIDA / CELEROL) según manual.
-- [ ] **Paso 4: Aplicación dosificada.** Suministrar la cantidad recomendada de grasa o aceite mediante equipo de aplicación adecuado (pistola o brocha).
-- [ ] **Paso 5: Limpieza de excedentes.** Retirar el lubricante sobrante para prevenir escurrimientos o acumulación indeseada en el entorno de los envases.
-- [ ] **Paso 6: Registro y verificación.** Comprobar el libre movimiento de los componentes engrasados y registrar el mantenimiento ejecutado.
-"""
-                else:
-                    pasos_resolucion = f"""
-- [ ] **Paso 1: Aseguramiento del área.** Notificar al personal operativo, detener el equipo y aplicar las normas de seguridad corporativas (**LOTOTO** / **SAM**).
-- [ ] **Paso 2: Análisis de la desviación.** Inspeccionar detalladamente el sistema de **{area_sel}** para identificar la causa raíz de la incidencia (*{desc}*).
-- [ ] **Paso 3: Ejecución de correcciones técnicas.** Realizar los ajustes, reaprietes, reposición de piezas o solución de parámetros que correspondan.
-- [ ] **Paso 4: Verificación de integridad.** Comprobar que no queden herramientas ni personal en zonas de riesgo operativo.
-- [ ] **Paso 5: Pruebas de arranque.** Poner en marcha la máquina en modo manual o en vacío para certificar la solución del problema.
-- [ ] **Paso 6: Liberación con Calidad.** Autorizar el reinicio de la producción en serie tras la validación del producto terminado.
+                if not plan_generado_ia:
+                    plan_generado_ia = f"""
+- [ ] **Paso 1: Aseguramiento y Seguridad (LOTOTO).** Detener el equipo de forma segura y aplicar bloqueos necesarios en el área de **{area_sel}**.
+- [ ] **Paso 2: Diagnóstico de la Desviación.** Inspeccionar el sistema para atender la incidencia reportada: *{desc}*.
+- [ ] **Paso 3: Intervención Correctiva.** Realizar ajustes, limpieza, verificación de parámetros o sustitución de componentes requeridos.
+- [ ] **Paso 4: Pruebas de Arranque.** Liberar bloqueos y poner en marcha la máquina en vacío o modo manual para certificar estabilidad.
+- [ ] **Paso 5: Liberación con Calidad.** Validar el producto terminado conforme a los estándares operativos de la **{linea_sel}**.
 """
 
                 respuesta_generada = f"""
@@ -711,7 +710,7 @@ if st.session_state.tab_activa == "plan":
 ---
 
 #### **Secuencia de Resolución Operativa:**
-{pasos_resolucion}
+{plan_generado_ia}
 
 ---
 **📖 Referencias y Documentación de Apoyo:**
@@ -851,7 +850,7 @@ elif st.session_state.tab_activa == "preguntas":
         else:
             st.error("Por favor, escribe una pregunta.")
 
-# --- SECCIÓN 4: CHAT IA CON GEMINI API (SISTEMA DE RESPALDO EN CASCADA) ---
+# --- SECCIÓN 4: CHAT IA CON GEMINI API ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
     st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
@@ -880,12 +879,9 @@ elif st.session_state.tab_activa == "chat":
                 respuesta_chat = ""
                 if gemini_client is not None:
                     prompt_sistema = f"""
-Eres MELENA, un asistente técnico experto en Automatización, Mecatrónica y Mantenimiento Industrial, especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo.
-Contexto actual: Línea activa: {linea_sel}, Área activa: {area_sel}.
-Fragmentos de manuales oficiales disponibles:
-{contexto_documentos if contexto_documentos else "Aplica conocimiento experto en ingeniería mecatrónica y automatización industrial."}
-
-Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directamente a lo que se te pregunta con una guía experta paso a paso estructurada con viñetas claras.
+Eres MELENA, asistente técnico experto en Automatización y Mantenimiento Industrial (Líneas 5 y 6 Grupo Modelo).
+Contexto: Línea: {linea_sel}, Área: {area_sel}. Manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
+Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
 """
                     contents_historial = []
                     for m in st.session_state["mensajes_chat"][:-1]:
@@ -893,7 +889,7 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = gemini_client.models.generate_content(
@@ -913,12 +909,12 @@ Instrucciones: Piensa de manera lógica, analítica y técnica. Responde directa
                     if not respuesta_chat:
                         respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente).* "
                 else:
-                    respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica que tu GEMINI_API_KEY esté correctamente configurada en los Secrets de Streamlit).* "
+                    respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica tu GEMINI_API_KEY en Streamlit Secrets).* "
 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO (VERSIÓN PERSISTENTE) ---
+# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir o Actualizar Documento en la Biblioteca</h3>", unsafe_allow_html=True)
     st.caption("Si subes un archivo con el mismo nombre que uno existente, se sobrescribirá automáticamente como nueva versión.")
