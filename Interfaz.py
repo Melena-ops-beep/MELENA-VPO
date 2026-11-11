@@ -421,7 +421,7 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES (OPTIMIZADOS PARA VDI) ---
+# --- ESTILOS CSS GLOBALES (FORZANDO AMARILLO INSTITUCIONAL #FFD700) ---
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #000000 !important; overflow-x: hidden; }}
@@ -456,6 +456,7 @@ st.markdown(f"""
         padding-right: 2rem !important;
     }}
 
+    /* Botones secundarios */
     div[data-testid="stButton"] > button[kind="secondary"] {{
         background-color: #222222 !important;
         border: 2px solid #FFD700 !important;
@@ -467,11 +468,13 @@ st.markdown(f"""
         align-items: center !important;
         justify-content: center !important;
         font-size: 0.85em !important;
-        transition: all 0.2s ease !important;
         width: 100% !important;
     }}
 
-    div[data-testid="stButton"] > button[kind="primary"] {{
+    /* Botones primarios (Forzando color amarillo #FFD700 y texto negro) */
+    div[data-testid="stButton"] > button[kind="primary"],
+    button[kind="primary"],
+    .stButton > button[data-baseweb="button"] {{
         background-color: #FFD700 !important;
         border: 2px solid #FFD700 !important;
         color: #000000 !important;
@@ -485,10 +488,15 @@ st.markdown(f"""
         box-shadow: 0 0 14px rgba(255, 215, 0, 0.9) !important;
         width: 100% !important;
     }}
+    
+    /* Forzar color de texto negro específico para cualquier elemento interno del botón primario */
+    div[data-testid="stButton"] > button[kind="primary"] * {{
+        color: #000000 !important;
+    }}
 
     div[data-testid="stButton"] > button:hover, 
     div[data-testid="stDownloadButton"] > button:hover {{
-        background-color: #FFD700 !important;
+        background-color: #E6C200 !important;
         color: #000000 !important;
     }}
 
