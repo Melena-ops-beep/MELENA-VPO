@@ -421,11 +421,11 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES (OCULTANDO MENÚ SUPERIOR Y BRANDING, AMPLIANDO LOGOS Y DISTRIBUCIÓN) ---
+# --- ESTILOS CSS GLOBALES (OCULTANDO MENÚ SUPERIOR, BRANDING Y BOTÓN FLOTANTE) ---
 st.markdown(f"""
     <style>
-    /* Ocultar menú superior derecho de Streamlit y botón flotante de branding */
-    #MainMenu, header, footer, [data-testid="stHeader"] {{
+    /* Ocultar menú superior derecho, footer, header y botón flotante de gestión de Streamlit */
+    #MainMenu, header, footer, [data-testid="stHeader"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], .stDeployButton {{
         visibility: hidden !important;
         display: none !important;
     }}
