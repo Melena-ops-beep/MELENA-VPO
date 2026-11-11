@@ -421,9 +421,15 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES (FORZANDO AMARILLO INSTITUCIONAL #FFD700) ---
+# --- ESTILOS CSS GLOBALES (OCULTANDO MENÚ SUPERIOR Y BRANDING, AMPLIANDO LOGOS Y DISTRIBUCIÓN) ---
 st.markdown(f"""
     <style>
+    /* Ocultar menú superior derecho de Streamlit y botón flotante de branding */
+    #MainMenu, header, footer, [data-testid="stHeader"] {{
+        visibility: hidden !important;
+        display: none !important;
+    }}
+
     .stApp {{ background-color: #000000 !important; overflow-x: hidden; }}
     h1, h2, h3, p, span, label, .stMarkdown {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
 
@@ -438,7 +444,7 @@ st.markdown(f"""
 
     div[data-testid="column"] {{
         background-color: #002D72 !important;
-        padding: 20px !important;
+        padding: 22px !important;
         border-radius: 15px !important;
         border: 2px solid #FFD700 !important;
         box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2) !important;
@@ -450,7 +456,7 @@ st.markdown(f"""
     }}
 
     .block-container {{ 
-        padding-top: 1rem !important; 
+        padding-top: 0.5rem !important; 
         max-width: 100% !important; 
         padding-left: 2rem !important;
         padding-right: 2rem !important;
@@ -471,7 +477,7 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
-    /* Botones primarios (Forzando color amarillo #FFD700 y texto negro) */
+    /* Botones primarios */
     div[data-testid="stButton"] > button[kind="primary"],
     button[kind="primary"],
     .stButton > button[data-baseweb="button"] {{
@@ -489,7 +495,6 @@ st.markdown(f"""
         width: 100% !important;
     }}
     
-    /* Forzar color de texto negro específico para cualquier elemento interno del botón primario */
     div[data-testid="stButton"] > button[kind="primary"] * {{
         color: #000000 !important;
     }}
@@ -527,26 +532,26 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ENCABEZADO FIJO ---
+# --- ENCABEZADO FIJO (LOGOS AMPLIADOS) ---
 _logo_ab_b64 = get_base64("abinbev")
 _logo_modelo_b64 = get_base64("modelo")
 _logo_melena_b64 = get_base64("melena")
 
 def _tag_logo(b64):
     if not b64: return ""
-    return f'<img src="data:image/png;base64,{b64}" style="height:42px; margin-right:22px;">'
+    return f'<img src="data:image/png;base64,{b64}" style="height:62px; margin-right:25px; object-fit: contain;">'
 
 st.markdown(f"""
-    <div style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
+    <div style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
         <div style="display: flex; align-items: center;">
             {_tag_logo(_logo_ab_b64)}
             {_tag_logo(_logo_modelo_b64)}
             {_tag_logo(_logo_melena_b64)}
         </div>
         <div style="text-align: right;">
-            <h1 style="color: #FFD700 !important; font-size: 1.5em; margin: 0;">MELENA</h1>
-            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
-            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
+            <h1 style="color: #FFD700 !important; font-size: 1.6em; margin: 0;">MELENA</h1>
+            <p style="color: #FFFFFF !important; font-size: 0.75em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
+            <p style="color: #FFFFFF !important; font-size: 0.75em; margin: 0; font-weight: bold;">Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
