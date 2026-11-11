@@ -32,17 +32,6 @@ except Exception:
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
 
-st.markdown(
-    """
-    <style>
-    .element-container, .stTextInput, .stSelectbox, .stButton {
-        width: 100% !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # --- DICCIONARIO MAESTRO ---
 ESTRUCTURA_FALLAS = {
     "Depaletizadora": {"foto": "depaletizadora", "componentes": {"Cabezal de agarre": ["Mecánica", "Neumática", "Electrónica"], "Mesa de descarga": ["Mecánica"], "Sistema de plano móvil": ["Mecánica"], "Sistema de elevación": ["Mecánica", "Electrónica"], "Sistema de transportación": ["Mecánica"]}},
@@ -432,19 +421,24 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES ---
+# --- ESTILOS CSS GLOBALES (OPTIMIZADOS PARA VDI) ---
 st.markdown(f"""
     <style>
-    .stApp {{ background-color: #000000 !important; }}
+    .stApp {{ background-color: #000000 !important; overflow-x: hidden; }}
     h1, h2, h3, p, span, label, .stMarkdown {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
 
-    [data-testid="stSidebar"] {{ {sidebar_css} border-right: 2px solid #FFD700; }}
+    [data-testid="stSidebar"] {{ 
+        {sidebar_css} 
+        border-right: 2px solid #FFD700; 
+        min-width: 280px !important;
+        max-width: 320px !important;
+    }}
     [data-testid="stSidebar"] > div:first-child {{ background-color: rgba(0, 0, 0, 0.75) !important; }}
     [data-testid="stSidebar"] * {{ color: #FFFFFF !important; }}
 
     div[data-testid="column"] {{
         background-color: #002D72 !important;
-        padding: 25px !important;
+        padding: 20px !important;
         border-radius: 15px !important;
         border: 2px solid #FFD700 !important;
         box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2) !important;
@@ -455,7 +449,12 @@ st.markdown(f"""
         background-color: #1E1E1E !important; color: #FFFFFF !important; border: 1px solid #FFD700 !important;
     }}
 
-    .block-container {{ padding-top: 1rem !important; }}
+    .block-container {{ 
+        padding-top: 1rem !important; 
+        max-width: 100% !important; 
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+    }}
 
     div[data-testid="stButton"] > button[kind="secondary"] {{
         background-color: #222222 !important;
@@ -671,7 +670,6 @@ Contexto: Línea: {linea_sel}, Área: {area_sel}, Tipo: {tipo_falla_sel}, Incide
 Fragmentos de manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
 Instrucciones: Genera un plan de acción profesional paso a paso con casillas de verificación (- [ ] **Paso X:** ...) enfocado en seguridad industrial (LOTOTO/SAM), diagnóstico y calidad.
 """
-                    # Lista de modelos estables actualizados para evitar 503
                     modelos_disponibles = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
