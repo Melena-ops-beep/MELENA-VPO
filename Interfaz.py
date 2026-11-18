@@ -16,6 +16,7 @@ from google import genai
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
+from gtts import gTTS  # Librería para Text-to-Speech (Modo Manos Libres)
 
 # --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +104,16 @@ def subir_archivo_a_google_drive(file_obj, nombre_archivo, mime_type):
     except Exception as e:
         st.error(f"Error al subir a Google Drive: {e}")
         return False
+
+def generar_audio_tts(texto):
+    try:
+        tts = gTTS(text=texto, lang='es', slow=False)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        return fp.read()
+    except Exception:
+        return None
 
 def normalizar_texto(texto):
     if not texto: return ""
@@ -540,7 +551,6 @@ st.markdown(f"""
         color: #FFFFFF !important;
     }}
 
-    /* --- ADAPTABILIDAD MÓVIL Y ESCRITORIO --- */
     @media (max-width: 900px) {{
         [data-testid="stHorizontalBlock"] {{
             flex-direction: column !important;
@@ -578,45 +588,17 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- BARRA SUPERIOR DE PARAMETRIZACIÓN (OPCIÓN 1: INTEGRADA EN HEADER) ---
-col_p1, col_p2, col_p3 = st.columns([1.2, 1.2, 1.5], gap="medium")
+# --- GESTIÓN DE ESTADO INICIAL ---
+if "linea_sel" not in st.session_state:
+    st.session_state["linea_sel"] = "Línea 5"
 
-with col_p1:
-    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>LÍNEA DE PRODUCCIÓN</p>", unsafe_allow_html=True)
-    if "linea_sel" not in st.session_state:
-        st.session_state["linea_sel"] = "Línea 5"
-    
-    _l5_activa = (st.session_state["linea_sel"] == "Línea 5")
-    _l6_activa = (st.session_state["linea_sel"] == "Línea 6")
-    
-    sub_col_l5, sub_col_l6 = st.columns(2)
-    with sub_col_l5:
-        if st.button("LÍNEA 5", key="btn_linea5", type="primary" if _l5_activa else "secondary", use_container_width=True):
-            st.session_state["linea_sel"] = "Línea 5"
-            st.rerun()
-    with sub_col_l6:
-        if st.button("LÍNEA 6", key="btn_linea6", type="primary" if _l6_activa else "secondary", use_container_width=True):
-            st.session_state["linea_sel"] = "Línea 6"
-            st.rerun()
+if "tab_activa" not in st.session_state:
+    st.session_state["tab_activa"] = "plan"
 
-linea_sel = st.session_state["linea_sel"]
-
-with col_p2:
-    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>ÁREA OPERATIVA / EQUIPO</p>", unsafe_allow_html=True)
-    area_sel = st.selectbox("Área Operativa:", areas_lista, key="area_sel_top", label_visibility="collapsed")
-
-with col_p3:
-    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>GESTIÓN DE ÍNDICE VECTORIAL (IA)</p>", unsafe_allow_html=True)
-    try: _total_indexado = obtener_coleccion_vectorial().count()
-    except Exception: _total_indexado = None
-
-    txt_indice = f"{_total_indexado} fragmento(s) indexado(s)" if _total_indexado else "Índice vacío"
-    if st.button(f"🔄 Actualizar Índice ({txt_indice})", key="btn_actualizar_indice_top", use_container_width=True):
-        with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
-            archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} doc(s), {chunks} fragmento(s).")
-
-st.divider()
+if "mensajes_chat" not in st.session_state:
+    st.session_state["mensajes_chat"] = [
+        {"role": "assistant", "content": "¡Hola! Soy **MELENA**, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. ¿Qué avería, procedimiento o duda técnica deseas consultar hoy?"}
+    ]
 
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
@@ -651,16 +633,22 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN (OPCIÓN 2: SELECTORES INTEGRADOS EN EL FORMULARIO) ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
-        st.markdown(f"<h3>Registro de Falla: {area_sel}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3>Registro de Falla y Diagnóstico VPO</h3>", unsafe_allow_html=True)
         col_form, col_componentes = st.columns([1.4, 1], gap="medium")
         
         with col_form:
+            # Selectores integrados de Línea y Área en el formulario principal
+            linea_sel = st.selectbox("Línea de Producción:", ["Línea 5", "Línea 6"], index=0 if st.session_state["linea_sel"]=="Línea 5" else 1, key="form_linea_sel")
+            st.session_state["linea_sel"] = linea_sel
+            
+            area_sel = st.selectbox("Área Operativa / Equipo:", areas_lista, key="form_area_sel")
+            
             tipo_falla_sel = st.selectbox("Tipo de falla:", OPCIONES_TIPO_FALLA)
-            desc = st.text_area("Descripción técnica de la desviación:", placeholder="Detalles observados...", height=110)
+            desc = st.text_area("Descripción técnica de la desviación:", placeholder="Detalles observados...", height=100)
             btn = st.button("GENERAR PLAN DE ACCIÓN", type="primary")
 
         with col_componentes:
@@ -671,6 +659,10 @@ if st.session_state.tab_activa == "plan":
                 html_componentes += f"<p style='margin: 0 0 4px 0; font-size: 0.85em; color: #FFFFFF;'>• {comp}</p>"
             html_componentes += "</div>"
             st.markdown(html_componentes, unsafe_allow_html=True)
+            
+            path_foto = encontrar_imagen(ESTRUCTURA_FALLAS[area_sel]["foto"])
+            if path_foto:
+                st.image(path_foto, use_container_width=True)
 
     with c2:
         st.markdown("<h3>Plan de Reacción Validado</h3>", unsafe_allow_html=True)
@@ -755,6 +747,16 @@ Instrucciones: Genera un plan de acción profesional paso a paso con casillas de
 
                 st.markdown(respuesta_generada)
                 
+                # --- NUEVA ESTRATEGIA: MODO MANOS LIBRES (TEXT-TO-SPEECH) ---
+                st.markdown("#### 🎧 Modo Manos Libres (Asistencia por Voz)")
+                texto_a_voz = f"Plan de reacción para {area_sel} en {linea_sel}. {plan_generado_ia.replace('- [ ]', 'Paso:')}"
+                audio_bytes = generar_audio_tts(texto_a_voz)
+                if audio_bytes:
+                    st.audio(audio_bytes, format='audio/mp3')
+                else:
+                    st.info("Audio de asistencia no disponible temporalmente.")
+
+                # --- NUEVA ESTRATEGIA: TARJETAS DE EVIDENCIA CON ZOOM Y DESCARGA ---
                 evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
                 if not evidencias_calc and DOCS_DIR:
                     for root, dirs, files in os.walk(DOCS_DIR):
@@ -766,7 +768,7 @@ Instrucciones: Genera un plan de acción profesional paso a paso con casillas de
 
                 if evidencias_calc:
                     st.divider()
-                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Referencias</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Planos de Referencia</h4>", unsafe_allow_html=True)
                     titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
                     tabs = st.tabs(titulos_tabs)
                     for idx, tab in enumerate(tabs):
@@ -775,22 +777,33 @@ Instrucciones: Genera un plan de acción profesional paso a paso con casillas de
                             if e["pdf_path"].lower().endswith(".pdf"):
                                 img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
                                 st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                
+                                # Botón de descarga directa de la hoja de referencia
+                                st.download_button(
+                                    label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
+                                    data=img_bytes,
+                                    file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
+                                    mime="image/png",
+                                    key=f"desc_evidencia_{idx}"
+                                )
                             else:
-                                st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel procesada y analizada por la IA.")
+                                st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel analizada por la IA.")
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
 # --- SECCIÓN 2: BIBLIOTECA DE DOCUMENTOS ---
 elif st.session_state.tab_activa == "docs":
-    st.markdown(f"<h3>Documentos disponibles: {area_sel} — {linea_sel}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3>Biblioteca de Documentos y Reportes</h3>", unsafe_allow_html=True)
+    linea_doc_sel = st.selectbox("Selecciona Línea:", ["Línea 5", "Línea 6"], key="doc_linea_sel")
+    area_doc_sel = st.selectbox("Selecciona Área:", areas_lista, key="doc_area_sel")
     tipo_doc_sel = st.selectbox("Tipo de documento:", list(TIPO_CARPETA.keys()))
     
-    pdfs_encontrados = listar_archivos(linea_sel, area_sel, tipo_doc_sel, extension=".pdf")
-    excels_encontrados = listar_archivos(linea_sel, area_sel, tipo_doc_sel, extension=".xlsx")
+    pdfs_encontrados = listar_archivos(linea_doc_sel, area_doc_sel, tipo_doc_sel, extension=".pdf")
+    excels_encontrados = listar_archivos(linea_doc_sel, area_doc_sel, tipo_doc_sel, extension=".xlsx")
     todos_docs = pdfs_encontrados + excels_encontrados
     
     if todos_docs:
-        st.success(f"Se encontraron {len(todos_docs)} documento(s) (PDF / Excel).")
+        st.success(f"Se encontraron {len(todos_docs)} documento(s).")
         for idx, ruta_archivo in enumerate(todos_docs):
             nombre_archivo = os.path.basename(ruta_archivo)
             archivo_bytes = leer_archivo_bytes_cacheado(ruta_archivo, os.path.getmtime(ruta_archivo))
@@ -804,11 +817,11 @@ elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP, RDA y Hojas Excel</h3>", unsafe_allow_html=True)
     
     col_f1, col_f2 = st.columns(2)
-    with col_f1: usar_linea_actual = st.checkbox(f"Buscar solo en {linea_sel}", value=True)
-    with col_f2: usar_area_actual = st.checkbox(f"Buscar solo en {area_sel}", value=True)
+    with col_f1: usar_linea_actual = st.checkbox(f"Filtrar por línea", value=True)
+    with col_f2: usar_area_actual = st.checkbox(f"Filtrar por área", value=False)
 
-    filtro_linea = linea_sel if usar_linea_actual else None
-    filtro_area = area_sel if usar_area_actual else None
+    filtro_linea = st.session_state["linea_sel"] if usar_linea_actual else None
+    filtro_area = st.selectbox("Área de filtro:", areas_lista) if usar_area_actual else None
 
     alcance_busqueda = st.radio(
         "Modo de filtrado de documentos:",
@@ -822,17 +835,17 @@ elif st.session_state.tab_activa == "preguntas":
         if archivos_disponibles:
             archivo_especifico = st.selectbox("Selecciona el documento específico:", archivos_disponibles)
         else:
-            st.warning("No se encontraron archivos PDF o Excel con los filtros aplicados.")
+            st.warning("No se encontraron archivos con los filtros aplicados.")
 
-    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué deba hacer si tengo atasco de caja en los rodillos?", height=100)
+    pregunta_libre = st.text_area("Escribe tu pregunta:", placeholder="Ej. ¿Qué procedimiento seguir ante un atasco de caja?", height=100)
     btn_preguntar = st.button("PREGUNTAR A LOS DOCUMENTOS", type="primary")
 
     if btn_preguntar:
         if pregunta_libre.strip():
             if alcance_busqueda == "Un documento en específico" and not archivo_especifico:
-                st.error("Por favor selecciona un documento válido de la lista.")
+                st.error("Por favor selecciona un documento válido.")
             else:
-                with st.spinner("Buscando la respuesta exacta en los manuales y hojas de Excel..."):
+                with st.spinner("Buscando respuesta exacta..."):
                     permitir_fb = (alcance_busqueda == "Todos los documentos del filtro")
                     fragmentos = buscar_contexto(
                         pregunta_libre, 
@@ -844,14 +857,12 @@ elif st.session_state.tab_activa == "preguntas":
                     )
 
                     if not fragmentos:
-                        st.warning("No se encontró información relevante para tu pregunta en los documentos indexados.")
+                        st.warning("No se encontró información relevante.")
                     else:
-                        st.success("Respuesta extraída de la documentación oficial (PDF / Excel):")
-                        
+                        st.success("Respuesta extraída de la documentación oficial:")
                         for idx_f, f in enumerate(fragmentos[:3]):
                             tipo_doc = f.get('tipo', 'Manual')
                             archivo_doc = f.get('archivo', 'Documento')
-                            pagina_doc = f.get('pagina', 1)
                             texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
                             
                             st.markdown(f"""
@@ -866,7 +877,7 @@ elif st.session_state.tab_activa == "preguntas":
                             """, unsafe_allow_html=True)
                         
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales de Origen</h4>", unsafe_allow_html=True)
+                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales y Descarga</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
                         titulos_tabs = [f"{e['archivo']}" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
@@ -876,15 +887,22 @@ elif st.session_state.tab_activa == "preguntas":
                                 if e["pdf_path"].lower().endswith(".pdf"):
                                     img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
                                     st.image(img_bytes, caption=f"Documento de origen: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                    st.download_button(
+                                        label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
+                                        data=img_bytes,
+                                        file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
+                                        mime="image/png",
+                                        key=f"desc_preg_{idx}"
+                                    )
                                 else:
-                                    st.info(f"El archivo analizado '{e['archivo']}' es un reporte en formato Excel (.xlsx).")
+                                    st.info(f"El archivo '{e['archivo']}' es un reporte en Excel (.xlsx).")
         else:
             st.error("Por favor, escribe una pregunta.")
 
 # --- SECCIÓN 4: CHAT IA CON GEMINI API ---
 elif st.session_state.tab_activa == "chat":
     st.markdown("<h3>Chat IA - Seguimiento de Averías (VPO)</h3>", unsafe_allow_html=True)
-    st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas en la línea.")
+    st.caption("Conversa en tiempo real con la IA sobre diagnósticos, ajustes y seguimiento de fallas.")
 
     avatar_config = f"data:image/png;base64,{_avatar_robot_b64}" if _avatar_robot_b64 else "assistant"
 
@@ -911,7 +929,7 @@ elif st.session_state.tab_activa == "chat":
                 if gemini_client is not None:
                     prompt_sistema = f"""
 Eres MELENA, asistente técnico experto en Automatización y Mantenimiento Industrial (Líneas 5 y 6 Grupo Modelo).
-Contexto: Línea: {linea_sel}, Área: {area_sel}. Manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
+Contexto: Línea: {st.session_state["linea_sel"]}. Manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
 Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
 """
                     contents_historial = []
@@ -940,7 +958,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                     if not respuesta_chat:
                         respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente).* "
                 else:
-                    respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica tu GEMINI_API_KEY en Streamlit Secrets).* "
+                    respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica tu GEMINI_API_KEY).* "
 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
@@ -954,9 +972,8 @@ elif st.session_state.tab_activa == "subir":
     
     with col_up1:
         st.markdown("#### Categorización del Documento")
-        idx_linea_def = 0 if linea_sel == "Línea 5" else 1
-        linea_dest = st.selectbox("Línea de Producción:", ["Línea 5", "Línea 6"], index=idx_linea_def, key="upload_linea_sel")
-        area_dest = st.selectbox("Equipo / Área Operativa:", areas_lista, index=areas_lista.index(area_sel) if area_sel in areas_lista else 0, key="upload_area_sel")
+        linea_dest = st.selectbox("Línea de Producción:", ["Línea 5", "Línea 6"], key="upload_linea_sel")
+        area_dest = st.selectbox("Equipo / Área Operativa:", areas_lista, key="upload_area_sel")
         tipo_doc_dest = st.selectbox("Tipo de Documento:", list(TIPO_CARPETA.keys()), key="upload_tipo_doc_sel")
         subcarpeta_nombre = TIPO_CARPETA[tipo_doc_dest]
         st.info(f"**Ruta de destino asignada:**\n`DOCUMENTOS/{linea_dest}/{area_dest}/{subcarpeta_nombre}/`")
@@ -978,7 +995,7 @@ elif st.session_state.tab_activa == "subir":
                     carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
                     os.makedirs(carpeta_destino, exist_ok=True)
                     ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
-                    with open(ruta_completa_archivo, "wb") as f:
+                    with open(ruta_completa_archivo, "wb" ) as f:
                         f.write(archivo_subido.getbuffer())
                         
                     st.success(f"Archivo **'{archivo_subido.name}'** subido a Google Drive y guardado con éxito.")
