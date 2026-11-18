@@ -26,13 +26,16 @@ DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
 INDICE_DIR = os.path.join(BASE_DIR, "INDICE_VECTORIAL")
 
 # --- CONFIGURACIÓN DE GEMINI API ---
-gemini_client = None
-try:
-    api_key_str = os.environ.get("GEMINI_API_KEY") or (st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None)
-    if api_key_str:
-        gemini_client = genai.Client(api_key=api_key_str)
-except Exception:
-    pass
+def obtener_cliente_gemini():
+    try:
+        api_key_str = os.environ.get("GEMINI_API_KEY") or (st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None)
+        if api_key_str:
+            return genai.Client(api_key=api_key_str.strip()), None
+        return None, "No se encontró GEMINI_API_KEY en Settings > Secrets de Streamlit Cloud."
+    except Exception as e:
+        return None, f"Error al inicializar cliente Gemini: {e}"
+
+gemini_client, error_init_gemini = obtener_cliente_gemini()
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
@@ -107,7 +110,8 @@ def subir_archivo_a_google_drive(file_obj, nombre_archivo, mime_type):
 
 def generar_audio_tts(texto):
     try:
-        tts = gTTS(text=texto, lang='es', slow=False)
+        texto_limpio_voz = re.sub(r'[#*`>\-\[\]]', '', texto)
+        tts = gTTS(text=texto_limpio_voz[:1500], lang='es', slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -633,7 +637,7 @@ with menu_col5:
 
 st.divider()
 
-# --- SECCIÓN 1: PLAN DE REACCIÓN (OPCIÓN 2: SELECTORES INTEGRADOS EN EL FORMULARIO) ---
+# --- SECCIÓN 1: PLAN DE REACCIÓN ---
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
@@ -641,7 +645,6 @@ if st.session_state.tab_activa == "plan":
         col_form, col_componentes = st.columns([1.4, 1], gap="medium")
         
         with col_form:
-            # Selectores integrados de Línea y Área en el formulario principal
             linea_sel = st.selectbox("Línea de Producción:", ["Línea 5", "Línea 6"], index=0 if st.session_state["linea_sel"]=="Línea 5" else 1, key="form_linea_sel")
             st.session_state["linea_sel"] = linea_sel
             
@@ -676,10 +679,10 @@ if st.session_state.tab_activa == "plan":
                     placeholder.markdown(f'''
                         <div style="text-align: center; padding: 20px;">
                             <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Generando plan de resolución con Gemini...</p>
+                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando causa raíz y redactando Plan VPO con Gemini...</p>
                         </div>''', unsafe_allow_html=True)
                 else:
-                    placeholder.info("Generando plan de resolución paso a paso...")
+                    placeholder.info("Analizando desviación técnica y redactando Plan VPO...")
 
                 fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
                 contexto_documentos = ""
@@ -688,106 +691,105 @@ if st.session_state.tab_activa == "plan":
                         contexto_documentos += f"- Documento: {f.get('archivo')} (Pág. {f.get('pagina', 1)}): {limpiar_texto_pdf(f.get('texto', ''))}\n"
 
                 plan_generado_ia = ""
-                if gemini_client is not None:
+                error_api = ""
+                cliente_actual, err_cli = obtener_cliente_gemini()
+                
+                if cliente_actual is not None:
                     prompt_sistema = f"""
-Eres MELENA, un asistente técnico experto en Mantenimiento Industrial y Excelencia Operativa VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo.
-Contexto: Línea: {linea_sel}, Área: {area_sel}, Tipo: {tipo_falla_sel}, Incidencia: {desc}.
-Fragmentos de manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
-Instrucciones: Genera un plan de acción profesional paso a paso con casillas de verificación (- [ ] **Paso X:** ...) enfocado en seguridad industrial (LOTOTO/SAM), diagnóstico y calidad.
+Eres MELENA, Ingeniero Especialista en Mantenimiento, Procesos y Excelencia Operativa (VPO) de Cervecería Modelo (Líneas de Envasado 5 y 6).
+Analiza técnicamente la siguiente desviación operativa y construye un Plan de Reacción paso a paso altamente específico, práctico y aplicable en piso de producción:
+
+- Línea: {linea_sel}
+- Equipo / Área: {area_sel}
+- Clasificación: {tipo_falla_sel}
+- Desviación reportada: {desc}
+
+Documentación interna recuperada:
+{contexto_documentos if contexto_documentos else "No se encontraron fragmentos específicos en manuales locales; aplica tu conocimiento experto en procesos de embotellado industrial, mecánica, química de lavado, instrumentación y automatización."}
+
+Estructura obligatoria de tu respuesta:
+1. **Análisis Técnico de Causa Raíz Probable:** Explica detalladamente qué sistemas, sensores, válvulas, componentes o parámetros del equipo ({area_sel}) provocan esta desviación.
+2. **Acciones Inmediatas de Contención y Seguridad (LOTOTO/EPP):** Qué hacer para proteger al operador, aislar el riesgo y evitar producto no conforme.
+3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
+4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-flash']
+                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.5-pro']
                     for modelo_actual in modelos_disponibles:
                         try:
-                            response = gemini_client.models.generate_content(
+                            response = cliente_actual.models.generate_content(
                                 model=modelo_actual,
-                                contents=[{"role": "user", "parts": [{"text": f"Genera el plan de reacción para: {desc}"}]}],
+                                contents=[{"role": "user", "parts": [{"text": f"Analiza y resuelve esta falla en {area_sel} ({linea_sel}): {desc}"}]}],
                                 config={
                                     'system_instruction': prompt_sistema,
-                                    'temperature': 0.3,
+                                    'temperature': 0.2,
                                 }
                             )
                             if response and response.text:
                                 plan_generado_ia = response.text
                                 break
-                        except Exception:
+                        except Exception as e:
+                            error_api = str(e)
                             continue
+                else:
+                    error_api = err_cli or "No se pudo conectar con la API de Gemini."
 
                 placeholder.empty()
-                st.success(f"Plan secuencial generado para {linea_sel.upper()} - {area_sel.upper()}")
 
-                if not plan_generado_ia:
-                    plan_generado_ia = f"""
-- [ ] **Paso 1: Aseguramiento y Seguridad (LOTOTO).** Detener el equipo de forma segura y aplicar bloqueos necesarios en el área de **{area_sel}**.
-- [ ] **Paso 2: Diagnóstico de la Desviación.** Inspeccionar el sistema para atender la incidencia reportada: *{desc}*.
-- [ ] **Paso 3: Intervención Correctiva.** Realizar ajustes, limpieza, verificación de parámetros o sustitución de componentes requeridos.
-- [ ] **Paso 4: Pruebas de Arranque.** Liberar bloqueos y poner en marcha la máquina en vacío o modo manual para certificar estabilidad.
-- [ ] **Paso 5: Liberación con Calidad.** Validar el producto terminado conforme a los estándares operativos de la **{linea_sel}**.
-"""
+                if plan_generado_ia:
+                    st.success(f"Diagnóstico y Plan de Reacción analizado por IA para {linea_sel.upper()} - {area_sel.upper()}")
 
-                respuesta_generada = f"""
-### 🛠️ PLAN DE ACCIÓN PASO A PASO (VPO)
-**Área / Equipo:** {area_sel} ({linea_sel})  
-**Tipo de Falla:** {tipo_falla_sel}  
-**Incidencia:** *{desc}*
+                    respuesta_generada = f"""
+### 🛠️ PLAN DE REACCIÓN ANALIZADO (VPO)
+**Área / Equipo:** {area_sel} ({linea_sel}) | **Tipo:** {tipo_falla_sel}  
+**Desviación:** *{desc}*
 
 ---
 
-#### **Secuencia de Resolución Operativa:**
 {plan_generado_ia}
 
 ---
-**📖 Referencias y Documentación de Apoyo:**
+**📖 Referencias Documentales Consultadas:**
 """
-                if fragmentos_pdf:
-                    for f in fragmentos_pdf[:3]:
-                        texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
-                        respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Página {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
+                    if fragmentos_pdf:
+                        for f in fragmentos_pdf[:3]:
+                            texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                            respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Pág. {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
+                    else:
+                        respuesta_generada += "> *Análisis generado mediante razonamiento experto de ingeniería de procesos VPO (sin fragmentos coincidentes en manuales indexados).* \n\n"
+
+                    st.markdown(respuesta_generada)
+                    
+                    # --- MODO MANOS LIBRES (TEXT-TO-SPEECH) ---
+                    st.markdown("#### 🎧 Modo Manos Libres (Asistencia por Voz)")
+                    texto_a_voz = f"Plan de reacción para {area_sel} en {linea_sel}. {plan_generado_ia}"
+                    audio_bytes = generar_audio_tts(texto_a_voz)
+                    if audio_bytes:
+                        st.audio(audio_bytes, format='audio/mp3')
+
+                    # --- TARJETAS DE EVIDENCIA CON ZOOM Y DESCARGA ---
+                    evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                    if evidencias_calc:
+                        st.divider()
+                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Planos de Referencia</h4>", unsafe_allow_html=True)
+                        titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
+                        tabs = st.tabs(titulos_tabs)
+                        for idx, tab in enumerate(tabs):
+                            e = evidencias_calc[idx]
+                            with tab:
+                                if e["pdf_path"].lower().endswith(".pdf"):
+                                    img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                    st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                    st.download_button(
+                                        label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
+                                        data=img_bytes,
+                                        file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
+                                        mime="image/png",
+                                        key=f"desc_evidencia_{idx}"
+                                    )
+                                else:
+                                    st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel analizada por la IA.")
                 else:
-                    respuesta_generada += f"> **[Manual Operativo General — {area_sel} | Estándares VPO]**\n> Seguir la guía de mantenimiento preventivo y solución de anomalías para la {linea_sel}.\n\n"
-
-                st.markdown(respuesta_generada)
-                
-                # --- NUEVA ESTRATEGIA: MODO MANOS LIBRES (TEXT-TO-SPEECH) ---
-                st.markdown("#### 🎧 Modo Manos Libres (Asistencia por Voz)")
-                texto_a_voz = f"Plan de reacción para {area_sel} en {linea_sel}. {plan_generado_ia.replace('- [ ]', 'Paso:')}"
-                audio_bytes = generar_audio_tts(texto_a_voz)
-                if audio_bytes:
-                    st.audio(audio_bytes, format='audio/mp3')
-                else:
-                    st.info("Audio de asistencia no disponible temporalmente.")
-
-                # --- NUEVA ESTRATEGIA: TARJETAS DE EVIDENCIA CON ZOOM Y DESCARGA ---
-                evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
-                if not evidencias_calc and DOCS_DIR:
-                    for root, dirs, files in os.walk(DOCS_DIR):
-                        for f in files:
-                            if f.lower().endswith((".pdf", ".xlsx")):
-                                evidencias_calc = [{"pdf_path": os.path.join(root, f), "pagina": 1, "archivo": f, "tipo": "Documento Operativo"}]
-                                break
-                        if evidencias_calc: break
-
-                if evidencias_calc:
-                    st.divider()
-                    st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Planos de Referencia</h4>", unsafe_allow_html=True)
-                    titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
-                    tabs = st.tabs(titulos_tabs)
-                    for idx, tab in enumerate(tabs):
-                        e = evidencias_calc[idx]
-                        with tab:
-                            if e["pdf_path"].lower().endswith(".pdf"):
-                                img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
-                                
-                                # Botón de descarga directa de la hoja de referencia
-                                st.download_button(
-                                    label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
-                                    data=img_bytes,
-                                    file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
-                                    mime="image/png",
-                                    key=f"desc_evidencia_{idx}"
-                                )
-                            else:
-                                st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel analizada por la IA.")
+                    st.error(f"⚠️ La IA no pudo procesar el análisis. Detalle técnico: {error_api}")
             else:
                 st.error("Por favor, ingrese una descripción técnica.")
 
@@ -926,7 +928,10 @@ elif st.session_state.tab_activa == "chat":
                         contexto_documentos += f"- Documento: {frag.get('archivo')} (Pág. {frag.get('pagina', 1)}): {limpiar_texto_pdf(frag.get('texto', ''))}\n"
 
                 respuesta_chat = ""
-                if gemini_client is not None:
+                error_chat = ""
+                cliente_chat, err_cli_chat = obtener_cliente_gemini()
+                
+                if cliente_chat is not None:
                     prompt_sistema = f"""
 Eres MELENA, asistente técnico experto en Automatización y Mantenimiento Industrial (Líneas 5 y 6 Grupo Modelo).
 Contexto: Línea: {st.session_state["linea_sel"]}. Manuales: {contexto_documentos if contexto_documentos else "Aplica conocimiento experto."}
@@ -938,10 +943,10 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-1.5-flash']
+                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.5-pro']
                     for modelo_actual in modelos_disponibles:
                         try:
-                            response = gemini_client.models.generate_content(
+                            response = cliente_chat.models.generate_content(
                                 model=modelo_actual,
                                 contents=contents_historial,
                                 config={
@@ -952,13 +957,14 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                             if response and response.text:
                                 respuesta_chat = response.text
                                 break
-                        except Exception:
+                        except Exception as e:
+                            error_chat = str(e)
                             continue
 
                     if not respuesta_chat:
-                        respuesta_chat = "*(Los servidores de Google presentan alta demanda temporal. Por favor, intenta enviar tu mensaje nuevamente).* "
+                        respuesta_chat = f"⚠️ Error al consultar la IA: {error_chat}"
                 else:
-                    respuesta_chat = "*(Aviso: gemini_client no está inicializado. Verifica tu GEMINI_API_KEY).* "
+                    respuesta_chat = f"⚠️ {err_cli_chat}"
 
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
@@ -995,7 +1001,7 @@ elif st.session_state.tab_activa == "subir":
                     carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
                     os.makedirs(carpeta_destino, exist_ok=True)
                     ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
-                    with open(ruta_completa_archivo, "wb" ) as f:
+                    with open(ruta_completa_archivo, "wb") as f:
                         f.write(archivo_subido.getbuffer())
                         
                     st.success(f"Archivo **'{archivo_subido.name}'** subido a Google Drive y guardado con éxito.")
