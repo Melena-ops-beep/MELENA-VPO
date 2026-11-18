@@ -420,9 +420,6 @@ def buscar_contexto_global(pregunta, top_k=3):
     return fragmentos
 
 # --- BASE64 DE ICONOS Y FONDOS ---
-fondo_sidebar = get_base64("fondo")
-sidebar_css = f'background-image: url("data:image/png;base64,{fondo_sidebar}"); background-size: cover;' if fondo_sidebar else ""
-
 _icono_generador_b64 = get_base64("icono_generador")
 _icono_biblioteca_b64 = get_base64("icono_biblioteca")
 _icono_preguntar_b64 = get_base64("icono_preguntar")
@@ -443,7 +440,7 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS ADAPTATIVOS (RESPONSIVE PARA MÓVILES Y ESCRITORIO VDI) ---
+# --- ESTILOS CSS ADAPTATIVOS (SIN BARRA LATERAL, 100% ANCHO ÚTIL) ---
 st.markdown(f"""
     <style>
     /* Ocultar elementos nativos de Streamlit */
@@ -454,15 +451,6 @@ st.markdown(f"""
 
     .stApp {{ background-color: #000000 !important; overflow-x: hidden; }}
     h1, h2, h3, p, span, label, .stMarkdown {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-
-    [data-testid="stSidebar"] {{ 
-        {sidebar_css} 
-        border-right: 2px solid #FFD700; 
-        min-width: 280px !important;
-        max-width: 320px !important;
-    }}
-    [data-testid="stSidebar"] > div:first-child {{ background-color: rgba(0, 0, 0, 0.75) !important; }}
-    [data-testid="stSidebar"] * {{ color: #FFFFFF !important; }}
 
     div[data-testid="column"] {{
         background-color: #002D72 !important;
@@ -480,8 +468,8 @@ st.markdown(f"""
     .block-container {{ 
         padding-top: 0.5rem !important; 
         max-width: 100% !important; 
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
     }}
 
     /* Botones secundarios */
@@ -552,9 +540,8 @@ st.markdown(f"""
         color: #FFFFFF !important;
     }}
 
-    /* --- ADAPTABILIDAD MÓVIL (MEDIA QUERY PARA TELÉFONOS) --- */
+    /* --- ADAPTABILIDAD MÓVIL Y ESCRITORIO --- */
     @media (max-width: 900px) {{
-        /* Apilar las columnas de navegación y del formulario principal en pantallas pequeñas */
         [data-testid="stHorizontalBlock"] {{
             flex-direction: column !important;
             gap: 10px !important;
@@ -563,87 +550,75 @@ st.markdown(f"""
             width: 100% !important;
             flex: 1 1 100% !important;
         }}
-        /* Reducir tamaño del encabezado en móviles para que no estorbe */
-        .header-container {{
-            flex-direction: column !important;
-            text-align: center !important;
-            padding: 10px !important;
-        }}
-        .header-logos {{
-            justify-content: center !important;
-            margin-bottom: 10px !important;
-        }}
     }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- ENCABEZADO FIJO (RESPONSIVE) ---
+# --- ENCABEZADO FIJO ---
 _logo_ab_b64 = get_base64("abinbev")
 _logo_modelo_b64 = get_base64("modelo")
 _logo_melena_b64 = get_base64("melena")
 
 def _tag_logo(b64):
     if not b64: return ""
-    return f'<img src="data:image/png;base64,{b64}" style="height:48px; margin-right:15px; object-fit: contain;">'
+    return f'<img src="data:image/png;base64,{b64}" style="height:55px; margin-right:20px; object-fit: contain;">'
 
 st.markdown(f"""
-    <div class="header-container" style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
-        <div class="header-logos" style="display: flex; align-items: center; flex-wrap: wrap;">
+    <div style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1rem -1rem;">
+        <div style="display: flex; align-items: center; flex-wrap: wrap;">
             {_tag_logo(_logo_ab_b64)}
             {_tag_logo(_logo_modelo_b64)}
             {_tag_logo(_logo_melena_b64)}
         </div>
         <div style="text-align: right;">
-            <h1 style="color: #FFD700 !important; font-size: 1.3em; margin: 0;">MELENA</h1>
-            <p style="color: #FFFFFF !important; font-size: 0.65em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
-            <p style="color: #FFFFFF !important; font-size: 0.65em; margin: 0; font-weight: bold;">Líneas 5 y 6 | Excelencia Operativa VPO</p>
+            <h1 style="color: #FFD700 !important; font-size: 1.4em; margin: 0;">MELENA</h1>
+            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
+            <p style="color: #FFFFFF !important; font-size: 0.7em; margin: 0; font-weight: bold;">Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.markdown("<h2 style='color: #FFD700 !important; margin-bottom:15px;'>Parametrización</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='font-weight:bold; margin-bottom:8px; color:#FFD700; font-size: 0.95em;'>LÍNEA DE PRODUCCIÓN</p>", unsafe_allow_html=True)
+# --- BARRA SUPERIOR DE PARAMETRIZACIÓN (OPCIÓN 1: INTEGRADA EN HEADER) ---
+col_p1, col_p2, col_p3 = st.columns([1.2, 1.2, 1.5], gap="medium")
 
+with col_p1:
+    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>LÍNEA DE PRODUCCIÓN</p>", unsafe_allow_html=True)
+    if "linea_sel" not in st.session_state:
+        st.session_state["linea_sel"] = "Línea 5"
+    
     _l5_activa = (st.session_state["linea_sel"] == "Línea 5")
     _l6_activa = (st.session_state["linea_sel"] == "Línea 6")
-
-    col_l5, col_l6 = st.columns(2)
-    with col_l5:
+    
+    sub_col_l5, sub_col_l6 = st.columns(2)
+    with sub_col_l5:
         if st.button("LÍNEA 5", key="btn_linea5", type="primary" if _l5_activa else "secondary", use_container_width=True):
             st.session_state["linea_sel"] = "Línea 5"
             st.rerun()
-    with col_l6:
+    with sub_col_l6:
         if st.button("LÍNEA 6", key="btn_linea6", type="primary" if _l6_activa else "secondary", use_container_width=True):
             st.session_state["linea_sel"] = "Línea 6"
             st.rerun()
 
-    linea_sel = st.session_state["linea_sel"]
-    st.divider()
+linea_sel = st.session_state["linea_sel"]
 
-    area_sel = st.selectbox("Área Operativa:", areas_lista, key="area_sel")
-    
-    path_foto = encontrar_imagen(ESTRUCTURA_FALLAS[area_sel]["foto"])
-    if path_foto:
-        st.image(path_foto, use_container_width=True)
-        st.caption(f"Activo seleccionado: {area_sel}")
-    st.divider()
+with col_p2:
+    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>ÁREA OPERATIVA / EQUIPO</p>", unsafe_allow_html=True)
+    area_sel = st.selectbox("Área Operativa:", areas_lista, key="area_sel_top", label_visibility="collapsed")
 
-    st.markdown("<h3 style='color: #FFD700 !important; font-size: 1.1em;'>Índice de Documentos (IA)</h3>", unsafe_allow_html=True)
+with col_p3:
+    st.markdown("<p style='font-weight:bold; margin-bottom:2px; color:#FFD700; font-size: 0.85em;'>GESTIÓN DE ÍNDICE VECTORIAL (IA)</p>", unsafe_allow_html=True)
     try: _total_indexado = obtener_coleccion_vectorial().count()
     except Exception: _total_indexado = None
 
-    if _total_indexado is None: st.caption("No se pudo abrir el índice en este momento.")
-    elif _total_indexado == 0: st.caption("El índice está vacío. Presione el botón de abajo.")
-    else: st.caption(f"{_total_indexado} fragmento(s) indexado(s) actualmente.")
-
-    if st.button("Actualizar índice de documentos", key="btn_actualizar_indice", use_container_width=True):
+    txt_indice = f"{_total_indexado} fragmento(s) indexado(s)" if _total_indexado else "Índice vacío"
+    if st.button(f"🔄 Actualizar Índice ({txt_indice})", key="btn_actualizar_indice_top", use_container_width=True):
         with st.spinner("Procesando documentos y hojas de Excel, e indexando contenido..."):
             archivos, chunks = indexar_todos_los_documentos()
-        st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
+        st.success(f"Índice actualizado: {archivos} doc(s), {chunks} fragmento(s).")
 
-# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS ADAPTATIVAS) ---
+st.divider()
+
+# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
 p_plan = (_tab == "plan")
 p_docs = (_tab == "docs")
