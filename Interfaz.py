@@ -5,6 +5,7 @@ import base64
 import re
 import unicodedata
 import time
+import io
 import numpy as np
 import pandas as pd
 from pypdf import PdfReader
@@ -12,6 +13,9 @@ import chromadb
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
 from sentence_transformers import SentenceTransformer
 from google import genai
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google.oauth2 import service_account
 
 # --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +68,7 @@ OPCIONES_TIPO_FALLA = [
     "Fallas en sistemas de control y sensores"
 ]
 
-# --- FUNCIONES AUXILIARES ---
+# --- FUNCIONES AUXILIARES Y GOOGLE DRIVE ---
 def encontrar_imagen(nombre_base):
     extensiones = ['.png', '.gif', '.jpg', '.jpeg']
     if not os.path.exists(IMG_DIR): return None
@@ -81,6 +85,24 @@ def get_base64(nombre_base):
     if path:
         with open(path, 'rb') as f: return base64.b64encode(f.read()).decode()
     return None
+
+def subir_archivo_a_google_drive(file_obj, nombre_archivo, mime_type):
+    try:
+        gcp_creds = dict(st.secrets["gcp_service_account"])
+        creds = service_account.Credentials.from_service_account_info(
+            gcp_creds, scopes=['https://www.googleapis.com/auth/drive']
+        )
+        service = build('drive', 'v3', credentials=creds)
+        folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
+        
+        file_metadata = {'name': nombre_archivo, 'parents': [folder_id]}
+        media = MediaIoBaseUpload(io.BytesIO(file_obj.getbuffer()), mimetype=mime_type, resumable=True)
+        
+        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return True
+    except Exception as e:
+        st.error(f"Error al subir a Google Drive: {e}")
+        return False
 
 def normalizar_texto(texto):
     if not texto: return ""
@@ -925,10 +947,10 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO ---
+# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO (CON GOOGLE DRIVE) ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir o Actualizar Documento en la Biblioteca</h3>", unsafe_allow_html=True)
-    st.caption("Si subes un archivo con el mismo nombre que uno existente, se sobrescribirá automáticamente como nueva versión.")
+    st.caption("Los documentos subidos se guardarán de forma permanente en Google Drive y se indexarán automáticamente.")
     
     col_up1, col_up2 = st.columns([1, 1], gap="large")
     
@@ -943,30 +965,32 @@ elif st.session_state.tab_activa == "subir":
 
     with col_up2:
         st.markdown("#### Carga de Archivo (PDF o XLSX)")
-        archivo_subido = st.file_uploader("Selecciona el archivo actualizado:", type=["pdf", "xlsx"], key="file_uploader_vpo")
+        archivo_subido = st.file_uploader("Selecciona el archivo:", type=["pdf", "xlsx"], key="file_uploader_vpo")
         auto_index = st.checkbox("Actualizar automáticamente el índice vectorial (ChromaDB)", value=True)
         btn_guardar_doc = st.button("GUARDAR / ACTUALIZAR VERSIÓN", type="primary", use_container_width=True)
         
         if btn_guardar_doc:
             if archivo_subido is not None:
-                carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
-                os.makedirs(carpeta_destino, exist_ok=True)
-                ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
+                mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if archivo_subido.name.endswith(".xlsx") else "application/pdf"
                 
-                version_previa_existe = os.path.exists(ruta_completa_archivo)
-                
-                with open(ruta_completa_archivo, "wb") as f:
-                    f.write(archivo_subido.getbuffer())
-                
-                if version_previa_existe:
-                    st.success(f"Versión actualizada con éxito para el archivo **'{archivo_subido.name}'**.")
+                with st.spinner("Subiendo documento de forma segura a Google Drive (Persistencia permanente)..."):
+                    exito_drive = subir_archivo_a_google_drive(archivo_subido, archivo_subido.name, mime)
+                    
+                if exito_drive:
+                    carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
+                    os.makedirs(carpeta_destino, exist_ok=True)
+                    ruta_completa_archivo = os.path.join(carpeta_destino, archivo_subido.name)
+                    with open(ruta_completa_archivo, "wb") as f:
+                        f.write(archivo_subido.getbuffer())
+                        
+                    st.success(f"Archivo **'{archivo_subido.name}'** subido a Google Drive y guardado con éxito.")
+                    
+                    if auto_index:
+                        with st.spinner("Reindexando la base de datos vectorial..."):
+                            tot_arch, tot_chk = indexar_todos_los_documentos()
+                        st.success(f"Índice actualizado. Total: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
                 else:
-                    st.success(f"Archivo **'{archivo_subido.name}'** guardado con éxito.")
-                
-                if auto_index:
-                    with st.spinner("Reindexando la base de datos vectorial con la nueva versión..."):
-                        tot_arch, tot_chk = indexar_todos_los_documentos()
-                    st.success(f"Índice actualizado correctamente. Total: {tot_arch} archivo(s), {tot_chk} fragmento(s).")
+                    st.error("No se pudo completar la subida a Google Drive.")
             else:
                 st.error("Por favor selecciona un archivo PDF o Excel antes de presionar Guardar.")
 
