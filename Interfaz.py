@@ -713,7 +713,7 @@ Estructura obligatoria de tu respuesta:
 3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
 4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.5-pro']
+                    modelos_disponibles = ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_actual.models.generate_content(
@@ -943,7 +943,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-2.5-flash', 'gemini-2.5-pro']
+                    modelos_disponibles = ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_chat.models.generate_content(
