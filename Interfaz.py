@@ -443,10 +443,10 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS GLOBALES (OCULTANDO MENÚ SUPERIOR, BRANDING Y BOTÓN FLOTANTE) ---
+# --- ESTILOS CSS ADAPTATIVOS (RESPONSIVE PARA MÓVILES Y ESCRITORIO VDI) ---
 st.markdown(f"""
     <style>
-    /* Ocultar menú superior derecho, footer, header y botón flotante de gestión de Streamlit */
+    /* Ocultar elementos nativos de Streamlit */
     #MainMenu, header, footer, [data-testid="stHeader"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], .stDeployButton {{
         visibility: hidden !important;
         display: none !important;
@@ -480,8 +480,8 @@ st.markdown(f"""
     .block-container {{ 
         padding-top: 0.5rem !important; 
         max-width: 100% !important; 
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
     }}
 
     /* Botones secundarios */
@@ -551,29 +551,52 @@ st.markdown(f"""
         margin-bottom: 12px;
         color: #FFFFFF !important;
     }}
+
+    /* --- ADAPTABILIDAD MÓVIL (MEDIA QUERY PARA TELÉFONOS) --- */
+    @media (max-width: 900px) {{
+        /* Apilar las columnas de navegación y del formulario principal en pantallas pequeñas */
+        [data-testid="stHorizontalBlock"] {{
+            flex-direction: column !important;
+            gap: 10px !important;
+        }}
+        [data-testid="column"] {{
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }}
+        /* Reducir tamaño del encabezado en móviles para que no estorbe */
+        .header-container {{
+            flex-direction: column !important;
+            text-align: center !important;
+            padding: 10px !important;
+        }}
+        .header-logos {{
+            justify-content: center !important;
+            margin-bottom: 10px !important;
+        }}
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- ENCABEZADO FIJO (LOGOS AMPLIADOS) ---
+# --- ENCABEZADO FIJO (RESPONSIVE) ---
 _logo_ab_b64 = get_base64("abinbev")
 _logo_modelo_b64 = get_base64("modelo")
 _logo_melena_b64 = get_base64("melena")
 
 def _tag_logo(b64):
     if not b64: return ""
-    return f'<img src="data:image/png;base64,{b64}" style="height:62px; margin-right:25px; object-fit: contain;">'
+    return f'<img src="data:image/png;base64,{b64}" style="height:48px; margin-right:15px; object-fit: contain;">'
 
 st.markdown(f"""
-    <div style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
-        <div style="display: flex; align-items: center;">
+    <div class="header-container" style="position: sticky; top: 0; z-index: 999; background-color: #000000; border-bottom: 2px solid #FFD700; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin: 0 -1rem 1.5rem -1rem;">
+        <div class="header-logos" style="display: flex; align-items: center; flex-wrap: wrap;">
             {_tag_logo(_logo_ab_b64)}
             {_tag_logo(_logo_modelo_b64)}
             {_tag_logo(_logo_melena_b64)}
         </div>
         <div style="text-align: right;">
-            <h1 style="color: #FFD700 !important; font-size: 1.6em; margin: 0;">MELENA</h1>
-            <p style="color: #FFFFFF !important; font-size: 0.75em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
-            <p style="color: #FFFFFF !important; font-size: 0.75em; margin: 0; font-weight: bold;">Líneas de Envasado 5 y 6 | Gestión de Excelencia Operativa VPO</p>
+            <h1 style="color: #FFD700 !important; font-size: 1.3em; margin: 0;">MELENA</h1>
+            <p style="color: #FFFFFF !important; font-size: 0.65em; margin: 0; font-weight: bold;">Módulo Especializado de Lectura y Ejecución para Normas y Averías</p>
+            <p style="color: #FFFFFF !important; font-size: 0.65em; margin: 0; font-weight: bold;">Líneas 5 y 6 | Excelencia Operativa VPO</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
@@ -620,7 +643,7 @@ with st.sidebar:
             archivos, chunks = indexar_todos_los_documentos()
         st.success(f"Índice actualizado: {archivos} documento(s), {chunks} fragmento(s).")
 
-# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
+# --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS ADAPTATIVAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
 p_plan = (_tab == "plan")
 p_docs = (_tab == "docs")
