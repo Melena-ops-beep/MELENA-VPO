@@ -23,7 +23,7 @@ DATA_DIR = os.path.join(BASE_DIR, "CONOCIMIENTO_VPO")
 DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
 INDICE_DIR = os.path.join(BASE_DIR, "INDICE_VECTORIAL")
 
-# --- CONFIGURACIÓN DE GEMINI API ---
+# --- CONFIGURACIÓN DE GEMINI API CON AUTODETECCIÓN DE MODELOS ---
 def obtener_cliente_gemini():
     try:
         api_key_str = os.environ.get("GEMINI_API_KEY") or (st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None)
@@ -33,7 +33,60 @@ def obtener_cliente_gemini():
     except Exception as e:
         return None, f"Error al inicializar cliente Gemini: {e}"
 
-gemini_client, error_init_gemini = obtener_cliente_gemini()
+@st.cache_data(ttl=3600, show_spinner=False)
+def obtener_modelos_activos_api():
+    cliente, _ = obtener_cliente_gemini()
+    preferidos = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    if not cliente:
+        return preferidos
+    try:
+        disponibles = []
+        for m in cliente.models.list():
+            nombre = getattr(m, "name", "")
+            metodos = getattr(m, "supported_actions", None) or getattr(m, "supported_generation_methods", None) or []
+            if "gemini" in nombre.lower() and ("generateContent" in metodos or not metodos):
+                limpio = nombre.replace("models/", "")
+                if not any(x in limpio for x in ["embedding", "imagen", "veo", "aqa", "tts"]):
+                    disponibles.append(limpio)
+        ordenados = []
+        for p in preferidos:
+            for d in disponibles:
+                if p in d and d not in ordenados:
+                    ordenados.append(d)
+        for d in disponibles:
+            if "flash" in d and d not in ordenados:
+                ordenados.append(d)
+        for d in disponibles:
+            if d not in ordenados:
+                ordenados.append(d)
+        return ordenados[:5] if ordenados else preferidos
+    except Exception:
+        return preferidos
+
+def ejecutar_generacion_gemini(cliente, contents, system_instruction, temperature=0.2):
+    modelos = obtener_modelos_activos_api()
+    errores = []
+    for modelo in modelos:
+        for intento in range(2):
+            try:
+                response = cliente.models.generate_content(
+                    model=modelo,
+                    contents=contents,
+                    config={
+                        "system_instruction": system_instruction,
+                        "temperature": temperature,
+                    }
+                )
+                if response and response.text:
+                    return response.text, None
+            except Exception as e:
+                err_str = str(e)
+                errores.append(f"[{modelo}]: {err_str}")
+                if "503" in err_str or "429" in err_str:
+                    time.sleep(2.5)
+                    continue
+                break
+    return None, " | ".join(errores[:3])
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="MELENA - VPO Support System", layout="wide")
@@ -723,24 +776,8 @@ Estructura obligatoria de tu respuesta:
 3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
 4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview']
-                    for modelo_actual in modelos_disponibles:
-                        try:
-                            response = cliente_actual.models.generate_content(
-                                model=modelo_actual,
-                                contents=[{"role": "user", "parts": [{"text": f"Analiza y resuelve esta falla en {area_sel} ({linea_sel}): {desc}"}]}],
-                                config={
-                                    'system_instruction': prompt_sistema,
-                                    'temperature': 0.2,
-                                }
-                            )
-                            if response and response.text:
-                                plan_generado_ia = response.text
-                                break
-                        except Exception as e:
-                            error_api = str(e)
-                            time.sleep(1.5)
-                            continue
+                    contents_plan = [{"role": "user", "parts": [{"text": f"Analiza y resuelve esta falla en {area_sel} ({linea_sel}): {desc}"}]}]
+                    plan_generado_ia, error_api = ejecutar_generacion_gemini(cliente_actual, contents_plan, prompt_sistema, temperature=0.2)
                 else:
                     error_api = err_cli or "No se pudo conectar con la API de Gemini."
 
@@ -954,24 +991,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview']
-                    for modelo_actual in modelos_disponibles:
-                        try:
-                            response = cliente_chat.models.generate_content(
-                                model=modelo_actual,
-                                contents=contents_historial,
-                                config={
-                                    'system_instruction': prompt_sistema,
-                                    'temperature': 0.3,
-                                }
-                            )
-                            if response and response.text:
-                                respuesta_chat = response.text
-                                break
-                        except Exception as e:
-                            error_chat = str(e)
-                            time.sleep(1.5)
-                            continue
+                    respuesta_chat, error_chat = ejecutar_generacion_gemini(cliente_chat, contents_historial, prompt_sistema, temperature=0.3)
 
                     if not respuesta_chat:
                         respuesta_chat = f"⚠️ Error al consultar la IA: {error_chat}"
