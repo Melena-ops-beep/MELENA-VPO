@@ -723,7 +723,7 @@ Estructura obligatoria de tu respuesta:
 3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
 4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']
+                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_actual.models.generate_content(
@@ -739,7 +739,7 @@ Estructura obligatoria de tu respuesta:
                                 break
                         except Exception as e:
                             error_api = str(e)
-                            time.sleep(1)
+                            time.sleep(1.5)
                             continue
                 else:
                     error_api = err_cli or "No se pudo conectar con la API de Gemini."
@@ -954,7 +954,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']
+                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_chat.models.generate_content(
@@ -970,7 +970,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                                 break
                         except Exception as e:
                             error_chat = str(e)
-                            time.sleep(1)
+                            time.sleep(1.5)
                             continue
 
                     if not respuesta_chat:
