@@ -23,7 +23,7 @@ DATA_DIR = os.path.join(BASE_DIR, "CONOCIMIENTO_VPO")
 DOCS_DIR = os.path.join(BASE_DIR, "DOCUMENTOS")
 INDICE_DIR = os.path.join(BASE_DIR, "INDICE_VECTORIAL")
 
-# --- CONFIGURACIÓN DE GEMINI API CON AUTODETECCIÓN DE MODELOS ---
+# --- CONFIGURACIÓN DE GEMINI API CON AUTODETECCIÓN Y ROTACIÓN POR CUOTA ---
 def obtener_cliente_gemini():
     try:
         api_key_str = os.environ.get("GEMINI_API_KEY") or (st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None)
@@ -36,18 +36,23 @@ def obtener_cliente_gemini():
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_modelos_activos_api():
     cliente, _ = obtener_cliente_gemini()
-    preferidos = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    preferidos = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite"
+    ]
     if not cliente:
         return preferidos
     try:
         disponibles = []
         for m in cliente.models.list():
-            nombre = getattr(m, "name", "")
+            nombre = getattr(m, "name", "").replace("models/", "")
             metodos = getattr(m, "supported_actions", None) or getattr(m, "supported_generation_methods", None) or []
             if "gemini" in nombre.lower() and ("generateContent" in metodos or not metodos):
-                limpio = nombre.replace("models/", "")
-                if not any(x in limpio for x in ["embedding", "imagen", "veo", "aqa", "tts"]):
-                    disponibles.append(limpio)
+                if not any(x in nombre for x in ["embedding", "imagen", "veo", "aqa", "tts"]):
+                    disponibles.append(nombre)
         ordenados = []
         for p in preferidos:
             for d in disponibles:
@@ -59,7 +64,7 @@ def obtener_modelos_activos_api():
         for d in disponibles:
             if d not in ordenados:
                 ordenados.append(d)
-        return ordenados[:5] if ordenados else preferidos
+        return ordenados[:8] if ordenados else preferidos
     except Exception:
         return preferidos
 
@@ -67,25 +72,26 @@ def ejecutar_generacion_gemini(cliente, contents, system_instruction, temperatur
     modelos = obtener_modelos_activos_api()
     errores = []
     for modelo in modelos:
-        for intento in range(2):
-            try:
-                response = cliente.models.generate_content(
-                    model=modelo,
-                    contents=contents,
-                    config={
-                        "system_instruction": system_instruction,
-                        "temperature": temperature,
-                    }
-                )
-                if response and response.text:
-                    return response.text, None
-            except Exception as e:
-                err_str = str(e)
-                errores.append(f"[{modelo}]: {err_str}")
-                if "503" in err_str or "429" in err_str:
-                    time.sleep(2.5)
-                    continue
-                break
+        try:
+            response = cliente.models.generate_content(
+                model=modelo,
+                contents=contents,
+                config={
+                    "system_instruction": system_instruction,
+                    "temperature": temperature,
+                }
+            )
+            if response and response.text:
+                return response.text, None
+        except Exception as e:
+            err_str = str(e)
+            errores.append(f"[{modelo}]: {err_str}")
+            # Si es 429 (cuota diaria/minuto agotada), saltar al instante al siguiente modelo
+            if "429" in err_str:
+                continue
+            if "503" in err_str:
+                time.sleep(1.5)
+            continue
     return None, " | ".join(errores[:3])
 
 # --- CONFIGURACIÓN DE PÁGINA ---
