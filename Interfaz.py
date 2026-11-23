@@ -86,7 +86,6 @@ def ejecutar_generacion_gemini(cliente, contents, system_instruction, temperatur
         except Exception as e:
             err_str = str(e)
             errores.append(f"[{modelo}]: {err_str}")
-            # Si es 429 (cuota diaria/minuto agotada), saltar al instante al siguiente modelo
             if "429" in err_str:
                 continue
             if "503" in err_str:
@@ -559,6 +558,19 @@ st.markdown(f"""
     }}
     div[data-testid="column"] h3 {{ color: #FFD700 !important; border-bottom: 1px solid #FFFFFF; padding-bottom: 10px; }}
 
+    /* Barra de desplazamiento personalizada para el contenedor del Plan de Reacción */
+    [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar {{
+        width: 8px;
+    }}
+    [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-track {{
+        background: #0A192F;
+        border-radius: 6px;
+    }}
+    [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb {{
+        background: #FFD700;
+        border-radius: 6px;
+    }}
+
     .stSelectbox div[data-baseweb="select"], .stTextArea textarea, .stTextInput input {{
         background-color: #1E1E1E !important; color: #FFFFFF !important; border: 1px solid #FFD700 !important;
     }}
@@ -738,33 +750,36 @@ if st.session_state.tab_activa == "plan":
 
     with c2:
         st.markdown("<h3>Plan de Reacción Validado</h3>", unsafe_allow_html=True)
-        if btn:
-            if desc:
-                placeholder = st.empty()
-                consulta_texto = f"{tipo_falla_sel} {desc}"
-                
-                gif_b64 = get_base64("procesando")
-                if gif_b64:
-                    placeholder.markdown(f'''
-                        <div style="text-align: center; padding: 20px;">
-                            <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
-                            <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando causa raíz y redactando Plan VPO con Gemini...</p>
-                        </div>''', unsafe_allow_html=True)
-                else:
-                    placeholder.info("Analizando desviación técnica y redactando Plan VPO...")
+        # Contenedor con scroll independiente para leer el plan sin desplazar toda la interfaz
+        contenedor_plan = st.container(height=540, border=False)
+        with contenedor_plan:
+            if btn:
+                if desc:
+                    placeholder = st.empty()
+                    consulta_texto = f"{tipo_falla_sel} {desc}"
+                    
+                    gif_b64 = get_base64("procesando")
+                    if gif_b64:
+                        placeholder.markdown(f'''
+                            <div style="text-align: center; padding: 20px;">
+                                <img src="data:image/gif;base64,{gif_b64}" style="width: 140px; border-radius: 50%; border: 3px solid #FFD700;">
+                                <p style="color: #FFD700; font-weight: bold; margin-top: 15px;">Analizando causa raíz y redactando Plan VPO con Gemini...</p>
+                            </div>''', unsafe_allow_html=True)
+                    else:
+                        placeholder.info("Analizando desviación técnica y redactando Plan VPO...")
 
-                fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
-                contexto_documentos = ""
-                if fragmentos_pdf:
-                    for f in fragmentos_pdf:
-                        contexto_documentos += f"- Documento: {f.get('archivo')} (Pág. {f.get('pagina', 1)}): {limpiar_texto_pdf(f.get('texto', ''))}\n"
+                    fragmentos_pdf = buscar_contexto(consulta_texto, linea=linea_sel, area=area_sel, top_k=4)
+                    contexto_documentos = ""
+                    if fragmentos_pdf:
+                        for f in fragmentos_pdf:
+                            contexto_documentos += f"- Documento: {f.get('archivo')} (Pág. {f.get('pagina', 1)}): {limpiar_texto_pdf(f.get('texto', ''))}\n"
 
-                plan_generado_ia = ""
-                error_api = ""
-                cliente_actual, err_cli = obtener_cliente_gemini()
-                
-                if cliente_actual is not None:
-                    prompt_sistema = f"""
+                    plan_generado_ia = ""
+                    error_api = ""
+                    cliente_actual, err_cli = obtener_cliente_gemini()
+                    
+                    if cliente_actual is not None:
+                        prompt_sistema = f"""
 Eres MELENA, Ingeniero Especialista en Mantenimiento, Procesos y Excelencia Operativa (VPO) de Cervecería Modelo (Líneas de Envasado 5 y 6).
 Analiza técnicamente la siguiente desviación operativa y construye un Plan de Reacción paso a paso altamente específico, práctico y aplicable en piso de producción:
 
@@ -782,17 +797,17 @@ Estructura obligatoria de tu respuesta:
 3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
 4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    contents_plan = [{"role": "user", "parts": [{"text": f"Analiza y resuelve esta falla en {area_sel} ({linea_sel}): {desc}"}]}]
-                    plan_generado_ia, error_api = ejecutar_generacion_gemini(cliente_actual, contents_plan, prompt_sistema, temperature=0.2)
-                else:
-                    error_api = err_cli or "No se pudo conectar con la API de Gemini."
+                        contents_plan = [{"role": "user", "parts": [{"text": f"Analiza y resuelve esta falla en {area_sel} ({linea_sel}): {desc}"}]}]
+                        plan_generado_ia, error_api = ejecutar_generacion_gemini(cliente_actual, contents_plan, prompt_sistema, temperature=0.2)
+                    else:
+                        error_api = err_cli or "No se pudo conectar con la API de Gemini."
 
-                placeholder.empty()
+                    placeholder.empty()
 
-                if plan_generado_ia:
-                    st.success(f"Diagnóstico y Plan de Reacción analizado por IA para {linea_sel.upper()} - {area_sel.upper()}")
+                    if plan_generado_ia:
+                        st.success(f"Diagnóstico y Plan de Reacción analizado por IA para {linea_sel.upper()} - {area_sel.upper()}")
 
-                    respuesta_generada = f"""
+                        respuesta_generada = f"""
 ### 🛠️ PLAN DE REACCIÓN ANALIZADO (VPO)
 **Área / Equipo:** {area_sel} ({linea_sel}) | **Tipo:** {tipo_falla_sel}  
 **Desviación:** *{desc}*
@@ -804,48 +819,48 @@ Estructura obligatoria de tu respuesta:
 ---
 **📖 Referencias Documentales Consultadas:**
 """
-                    if fragmentos_pdf:
-                        for f in fragmentos_pdf[:3]:
-                            texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
-                            respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Pág. {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
+                        if fragmentos_pdf:
+                            for f in fragmentos_pdf[:3]:
+                                texto_limpio = limpiar_texto_pdf(f.get('texto', ''))
+                                respuesta_generada += f"> **[{f.get('tipo', 'Manual')} — {f.get('archivo', 'Documento')} | Pág. {f.get('pagina', 1)}]**\n> {texto_limpio}\n\n"
+                        else:
+                            respuesta_generada += "> *Análisis generado mediante razonamiento experto de ingeniería de procesos VPO (sin fragmentos coincidentes en manuales indexados).* \n\n"
+
+                        st.markdown(respuesta_generada)
+                        
+                        # --- MODO MANOS LIBRES (TEXT-TO-SPEECH) ---
+                        st.markdown("#### 🎧 Modo Manos Libres (Asistencia por Voz)")
+                        texto_a_voz = f"Plan de reacción para {area_sel} en {linea_sel}. {plan_generado_ia}"
+                        audio_bytes = generar_audio_tts(texto_a_voz)
+                        if audio_bytes:
+                            st.audio(audio_bytes, format='audio/mp3')
+
+                        # --- TARJETAS DE EVIDENCIA CON ZOOM Y DESCARGA ---
+                        evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
+                        if evidencias_calc:
+                            st.divider()
+                            st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Planos de Referencia</h4>", unsafe_allow_html=True)
+                            titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
+                            tabs = st.tabs(titulos_tabs)
+                            for idx, tab in enumerate(tabs):
+                                e = evidencias_calc[idx]
+                                with tab:
+                                    if e["pdf_path"].lower().endswith(".pdf"):
+                                        img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
+                                        st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
+                                        st.download_button(
+                                            label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
+                                            data=img_bytes,
+                                            file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
+                                            mime="image/png",
+                                            key=f"desc_evidencia_{idx}"
+                                        )
+                                    else:
+                                        st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel analizada por la IA.")
                     else:
-                        respuesta_generada += "> *Análisis generado mediante razonamiento experto de ingeniería de procesos VPO (sin fragmentos coincidentes en manuales indexados).* \n\n"
-
-                    st.markdown(respuesta_generada)
-                    
-                    # --- MODO MANOS LIBRES (TEXT-TO-SPEECH) ---
-                    st.markdown("#### 🎧 Modo Manos Libres (Asistencia por Voz)")
-                    texto_a_voz = f"Plan de reacción para {area_sel} en {linea_sel}. {plan_generado_ia}"
-                    audio_bytes = generar_audio_tts(texto_a_voz)
-                    if audio_bytes:
-                        st.audio(audio_bytes, format='audio/mp3')
-
-                    # --- TARJETAS DE EVIDENCIA CON ZOOM Y DESCARGA ---
-                    evidencias_calc = obtener_evidencias_priorizadas(fragmentos_pdf) if fragmentos_pdf else []
-                    if evidencias_calc:
-                        st.divider()
-                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Planos de Referencia</h4>", unsafe_allow_html=True)
-                        titulos_tabs = [f"Pág. {e['pagina']} ({e['archivo']})" for e in evidencias_calc[:3]]
-                        tabs = st.tabs(titulos_tabs)
-                        for idx, tab in enumerate(tabs):
-                            e = evidencias_calc[idx]
-                            with tab:
-                                if e["pdf_path"].lower().endswith(".pdf"):
-                                    img_bytes = obtener_imagen_pagina_ram(e["pdf_path"], e["pagina"], dpi=300)
-                                    st.image(img_bytes, caption=f"Documento de referencia: {e['archivo']} — Página {e['pagina']}", use_container_width=True)
-                                    st.download_button(
-                                        label=f"📥 Descargar hoja de referencia (Pág. {e['pagina']})",
-                                        data=img_bytes,
-                                        file_name=f"{os.path.splitext(e['archivo'])[0]}_pag_{e['pagina']}.png",
-                                        mime="image/png",
-                                        key=f"desc_evidencia_{idx}"
-                                    )
-                                else:
-                                    st.info(f"El archivo '{e['archivo']}' es una hoja de cálculo Excel analizada por la IA.")
+                        st.error(f"⚠️ La IA no pudo procesar el análisis. Detalle técnico: {error_api}")
                 else:
-                    st.error(f"⚠️ La IA no pudo procesar el análisis. Detalle técnico: {error_api}")
-            else:
-                st.error("Por favor, ingrese una descripción técnica.")
+                    st.error("Por favor, ingrese una descripción técnica.")
 
 # --- SECCIÓN 2: BIBLIOTECA DE DOCUMENTOS ---
 elif st.session_state.tab_activa == "docs":
