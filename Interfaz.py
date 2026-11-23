@@ -6,6 +6,7 @@ import re
 import unicodedata
 import time
 import io
+import requests
 import numpy as np
 import pandas as pd
 from pypdf import PdfReader
@@ -13,9 +14,6 @@ import chromadb
 import fitz  # PyMuPDF para renderizado en RAM a 300 DPI
 from sentence_transformers import SentenceTransformer
 from google import genai
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-from google.oauth2 import service_account
 from gtts import gTTS  # Librería para Text-to-Speech (Modo Manos Libres)
 
 # --- CONFIGURACIÓN DE RUTAS MULTIPLATAFORMA ---
@@ -72,7 +70,7 @@ OPCIONES_TIPO_FALLA = [
     "Fallas en sistemas de control y sensores"
 ]
 
-# --- FUNCIONES AUXILIARES Y GOOGLE DRIVE ---
+# --- FUNCIONES AUXILIARES Y GOOGLE DRIVE (APPS SCRIPT BRIDGE) ---
 def encontrar_imagen(nombre_base):
     extensiones = ['.png', '.gif', '.jpg', '.jpeg']
     if not os.path.exists(IMG_DIR): return None
@@ -90,22 +88,35 @@ def get_base64(nombre_base):
         with open(path, 'rb') as f: return base64.b64encode(f.read()).decode()
     return None
 
-def subir_archivo_a_google_drive(file_obj, nombre_archivo, mime_type):
+def subir_archivo_a_google_drive(file_obj, nombre_archivo, mime_type, linea="General", area="General", tipo="Documentos"):
     try:
-        gcp_creds = dict(st.secrets["gcp_service_account"])
-        creds = service_account.Credentials.from_service_account_info(
-            gcp_creds, scopes=['https://www.googleapis.com/auth/drive']
-        )
-        service = build('drive', 'v3', credentials=creds)
-        folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
+        if "APPS_SCRIPT_URL" not in st.secrets:
+            st.error("No se encontró APPS_SCRIPT_URL en Settings > Secrets de Streamlit Cloud.")
+            return False
         
-        file_metadata = {'name': nombre_archivo, 'parents': [folder_id]}
-        media = MediaIoBaseUpload(io.BytesIO(file_obj.getbuffer()), mimetype=mime_type, resumable=True)
+        url_script = st.secrets["APPS_SCRIPT_URL"].strip()
+        archivo_b64 = base64.b64encode(file_obj.getbuffer()).decode("utf-8")
         
-        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        return True
+        payload = {
+            "fileName": nombre_archivo,
+            "mimeType": mime_type,
+            "fileBase64": archivo_b64,
+            "linea": linea,
+            "area": area,
+            "tipo": tipo
+        }
+        
+        respuesta = requests.post(url_script, json=payload, timeout=90)
+        respuesta.raise_for_status()
+        resultado = respuesta.json()
+        
+        if resultado.get("status") == "success":
+            return True
+        else:
+            st.error(f"Error en Apps Script: {resultado.get('message')}")
+            return False
     except Exception as e:
-        st.error(f"Error al subir a Google Drive: {e}")
+        st.error(f"Error al conectar con Google Drive: {e}")
         return False
 
 def generar_audio_tts(texto):
@@ -133,7 +144,7 @@ def limpiar_texto_pdf(texto):
     texto_limpio = re.sub(r'\s+', ' ', texto_limpio)
     return texto_limpio.strip()
 
-# --- MODELO DE EMBEDDINGS EN LA NUBE ---
+# --- MODELO DE EMBEDDINGS EN LA NUBE (CARGA BAJO DEMANDA) ---
 @st.cache_resource
 def cargar_modelo_embedding():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -196,6 +207,7 @@ def listar_archivos_filtrados(linea=None, area=None, extension=None):
         if c_area: base = c_area
         else: return []
 
+    if not os.path.exists(base): return []
     for root, dirs, files in os.walk(base):
         for f in files:
             if extension:
@@ -211,8 +223,18 @@ def leer_archivo_bytes_cacheado(ruta_archivo, fecha_modificacion):
 # --- RAG, RENDERIZADO RAM E ÍNDICE VECTORIAL ---
 @st.cache_resource
 def obtener_coleccion_vectorial():
+    os.makedirs(INDICE_DIR, exist_ok=True)
     cliente = chromadb.PersistentClient(path=INDICE_DIR)
     return cliente.get_or_create_collection(name="documentos_melena")
+
+def indice_tiene_datos():
+    if not os.path.exists(INDICE_DIR) or not os.listdir(INDICE_DIR):
+        return False
+    try:
+        coleccion = obtener_coleccion_vectorial()
+        return coleccion.count() > 0
+    except Exception:
+        return False
 
 def resolver_ruta_y_pagina(top_f):
     if not top_f: return None, 1
@@ -221,7 +243,7 @@ def resolver_ruta_y_pagina(top_f):
     archivo_nombre = top_f.get("archivo")
 
     if not ruta_archivo or not os.path.exists(ruta_archivo):
-        if archivo_nombre:
+        if archivo_nombre and os.path.exists(DOCS_DIR):
             for root, dirs, files in os.walk(DOCS_DIR):
                 for f in files:
                     if f.lower() == archivo_nombre.lower():
@@ -370,9 +392,10 @@ def indexar_todos_los_documentos():
     return total_archivos, total_chunks
 
 def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=4, permitir_fallback=True):
+    if not indice_tiene_datos():
+        return []
+        
     coleccion = obtener_coleccion_vectorial()
-    if coleccion.count() == 0: return []
-    
     embedding_pregunta = obtener_embedding(pregunta)
     where_filter = {}
     if linea and area:
@@ -417,8 +440,10 @@ def buscar_contexto(pregunta, linea=None, area=None, archivo=None, top_k=4, perm
     return fragmentos
 
 def buscar_contexto_global(pregunta, top_k=3):
+    if not indice_tiene_datos():
+        return []
+        
     coleccion = obtener_coleccion_vectorial()
-    if coleccion.count() == 0: return []
     embedding_pregunta = obtener_embedding(pregunta)
     resultados = coleccion.query(query_embeddings=[embedding_pregunta], n_results=top_k)
     
@@ -455,10 +480,9 @@ def _css_icono_boton(clave_boton, icono_b64):
     }}
     """
 
-# --- ESTILOS CSS ADAPTATIVOS (SIN BARRA LATERAL, 100% ANCHO ÚTIL) ---
+# --- ESTILOS CSS ADAPTATIVOS ---
 st.markdown(f"""
     <style>
-    /* Ocultar elementos nativos de Streamlit */
     #MainMenu, header, footer, [data-testid="stHeader"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], .stDeployButton {{
         visibility: hidden !important;
         display: none !important;
@@ -487,7 +511,6 @@ st.markdown(f"""
         padding-right: 2rem !important;
     }}
 
-    /* Botones secundarios */
     div[data-testid="stButton"] > button[kind="secondary"] {{
         background-color: #222222 !important;
         border: 2px solid #FFD700 !important;
@@ -502,7 +525,6 @@ st.markdown(f"""
         width: 100% !important;
     }}
 
-    /* Botones primarios */
     div[data-testid="stButton"] > button[kind="primary"],
     button[kind="primary"],
     .stButton > button[data-baseweb="button"] {{
@@ -592,18 +614,6 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- GESTIÓN DE ESTADO INICIAL ---
-if "linea_sel" not in st.session_state:
-    st.session_state["linea_sel"] = "Línea 5"
-
-if "tab_activa" not in st.session_state:
-    st.session_state["tab_activa"] = "plan"
-
-if "mensajes_chat" not in st.session_state:
-    st.session_state["mensajes_chat"] = [
-        {"role": "assistant", "content": "¡Hola! Soy **MELENA**, tu asistente técnico de VPO especializado en las Líneas de Envasado 5 y 6 de Grupo Modelo. ¿Qué avería, procedimiento o duda técnica deseas consultar hoy?"}
-    ]
-
 # --- NAVEGACIÓN Y PESTAÑAS PRINCIPALES (5 PESTAÑAS) ---
 _tab = st.session_state.get("tab_activa", "plan")
 p_plan = (_tab == "plan")
@@ -641,7 +651,7 @@ st.divider()
 if st.session_state.tab_activa == "plan":
     c1, c2 = st.columns([1.3, 1], gap="large")
     with c1:
-        st.markdown(f"<h3>Registro de Falla y Diagnóstico VPO</h3>", unsafe_allow_html=True)
+        st.markdown("<h3>Registro de Falla y Diagnóstico VPO</h3>", unsafe_allow_html=True)
         col_form, col_componentes = st.columns([1.4, 1], gap="medium")
         
         with col_form:
@@ -713,7 +723,7 @@ Estructura obligatoria de tu respuesta:
 3. **Plan de Reacción Paso a Paso:** Lista detallada con casillas (`- [ ] **Paso X:** ...`) con verificaciones de instrumentos, ajustes mecánicos/eléctricos o pruebas de proceso necesarias.
 4. **Criterios de Liberación (Calidad VPO):** Cómo confirmar que el equipo o parámetro volvió dentro de especificación antes de arrancar.
 """
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview']
+                    modelos_disponibles = ['gemini-3.8-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_actual.models.generate_content(
@@ -795,7 +805,7 @@ Estructura obligatoria de tu respuesta:
 
 # --- SECCIÓN 2: BIBLIOTECA DE DOCUMENTOS ---
 elif st.session_state.tab_activa == "docs":
-    st.markdown(f"<h3>Biblioteca de Documentos y Reportes</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>Biblioteca de Documentos y Reportes</h3>", unsafe_allow_html=True)
     linea_doc_sel = st.selectbox("Selecciona Línea:", ["Línea 5", "Línea 6"], key="doc_linea_sel")
     area_doc_sel = st.selectbox("Selecciona Área:", areas_lista, key="doc_area_sel")
     tipo_doc_sel = st.selectbox("Tipo de documento:", list(TIPO_CARPETA.keys()))
@@ -819,8 +829,8 @@ elif st.session_state.tab_activa == "preguntas":
     st.markdown("<h3>Pregúntale a los manuales, PDR, SOP, RDA y Hojas Excel</h3>", unsafe_allow_html=True)
     
     col_f1, col_f2 = st.columns(2)
-    with col_f1: usar_linea_actual = st.checkbox(f"Filtrar por línea", value=True)
-    with col_f2: usar_area_actual = st.checkbox(f"Filtrar por área", value=False)
+    with col_f1: usar_linea_actual = st.checkbox("Filtrar por línea", value=True)
+    with col_f2: usar_area_actual = st.checkbox("Filtrar por área", value=False)
 
     filtro_linea = st.session_state["linea_sel"] if usar_linea_actual else None
     filtro_area = st.selectbox("Área de filtro:", areas_lista) if usar_area_actual else None
@@ -879,7 +889,7 @@ elif st.session_state.tab_activa == "preguntas":
                             """, unsafe_allow_html=True)
                         
                         st.divider()
-                        st.markdown(f"<h4 style='color: #FFD700;'>Evidencias Visuales y Descarga</h4>", unsafe_allow_html=True)
+                        st.markdown("<h4 style='color: #FFD700;'>Evidencias Visuales y Descarga</h4>", unsafe_allow_html=True)
                         evidencias = obtener_evidencias_priorizadas(fragmentos)
                         titulos_tabs = [f"{e['archivo']}" for e in evidencias]
                         tabs = st.tabs(titulos_tabs)
@@ -943,7 +953,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                         contents_historial.append({"role": role_gemini, "parts": [{"text": m["content"]}]})
                     contents_historial.append({"role": "user", "parts": [{"text": prompt_chat}]})
 
-                    modelos_disponibles = ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview']
+                    modelos_disponibles = ['gemini-3.8-flash']
                     for modelo_actual in modelos_disponibles:
                         try:
                             response = cliente_chat.models.generate_content(
@@ -969,7 +979,7 @@ Instrucciones: Responde de forma analítica y experta con una guía paso a paso.
                 st.markdown(respuesta_chat)
                 st.session_state["mensajes_chat"].append({"role": "assistant", "content": respuesta_chat})
 
-# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO (CON GOOGLE DRIVE) ---
+# --- SECCIÓN 5: SUBIR O ACTUALIZAR UN DOCUMENTO (CON GOOGLE DRIVE VÍA APPS SCRIPT) ---
 elif st.session_state.tab_activa == "subir":
     st.markdown("<h3>Subir o Actualizar Documento en la Biblioteca</h3>", unsafe_allow_html=True)
     st.caption("Los documentos subidos se guardarán de forma permanente en Google Drive y se indexarán automáticamente.")
@@ -994,8 +1004,15 @@ elif st.session_state.tab_activa == "subir":
             if archivo_subido is not None:
                 mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if archivo_subido.name.endswith(".xlsx") else "application/pdf"
                 
-                with st.spinner("Subiendo documento de forma segura a Google Drive (Persistencia permanente)..."):
-                    exito_drive = subir_archivo_a_google_drive(archivo_subido, archivo_subido.name, mime)
+                with st.spinner("Subiendo documento de forma segura a Google Drive..."):
+                    exito_drive = subir_archivo_a_google_drive(
+                        archivo_subido, 
+                        archivo_subido.name, 
+                        mime, 
+                        linea=linea_dest, 
+                        area=area_dest, 
+                        tipo=subcarpeta_nombre
+                    )
                     
                 if exito_drive:
                     carpeta_destino = os.path.join(DOCS_DIR, linea_dest, area_dest, subcarpeta_nombre)
